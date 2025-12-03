@@ -3,22 +3,14 @@ use crate::cryptography::encrypt::{generate_key, encrypt_file, decrypt_file};
 use age::x25519;
 use anyhow::Result;
 
-// default passphrase- most likely should be separately made for each user
-const DEFAULT_PASSPHRASE: &str = "default_passphrase";
-
 pub struct FileEncryptor {
     secret_key: x25519::Identity,
     public_key: x25519::Recipient,
-    passphrase: String,
 }
 impl FileEncryptor {
     pub fn new() -> Self {
         let (sec_key, pub_key) = generate_key();
-        FileEncryptor {
-            secret_key: sec_key,
-            public_key: pub_key,
-            passphrase: DEFAULT_PASSPHRASE.to_string(),
-        }
+        FileEncryptor { secret_key: sec_key, public_key: pub_key }
     }
 
     pub fn encrypt_folder(&self, folder_path: &Path) -> Result<()> {
@@ -43,11 +35,7 @@ impl FileEncryptor {
         Ok(())
     }
 
-    pub fn decrypt_folder(&self, folder_path: &Path, input_passphrase: &str) -> Result<()> {
-        if input_passphrase != self.passphrase {
-            return Err(anyhow::anyhow!("Invalid passphrase"));
-        }
-
+    pub fn decrypt_folder(&self, folder_path: &Path) -> Result<()> {
         if !folder_path.exists() || !folder_path.is_dir() {
             return Err(anyhow::anyhow!("Invalid folder path"));
         }
