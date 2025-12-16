@@ -12,7 +12,7 @@ use windows::{
     core::PWSTR,
     Win32::{
         UI::Shell::{SHGetKnownFolderPath, FOLDERID_Music, FOLDERID_Documents, FOLDERID_Desktop, FOLDERID_Videos, KNOWN_FOLDER_FLAG},
-        System::Com::CoTaskMemFree,
+        System::Com::{CoInitializeEx, CoTaskMemFree, COINIT_MULTITHREADED},
     },
 };
 

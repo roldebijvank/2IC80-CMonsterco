@@ -15,12 +15,12 @@ use windows::{
     },
 };
 
-fn desktop_file_path(filename: &str) -> PathBuf {
+fn desktop_file_path(filename: &str) -> Result<PathBuf> {
     unsafe {
-        let path: PWSTR = SHGetKnownFolderPath(&FOLDERID_Desktop, KNOWN_FOLDER_FLAG(0), None)?;
+        let path: PWSTR = SHGetKnownFolderPath(&FOLDERID_Desktop, KNOWN_FOLDER_FLAG(0), None);
 
         let desktop = path.to_string().unwrap();
-        PathBuf::from(desktop).join(filename)
+        Ok(PathBuf::from(desktop).join(filename))
     }
 }
 
