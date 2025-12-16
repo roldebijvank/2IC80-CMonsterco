@@ -21,10 +21,10 @@ jobs:
       # libsodium is preinstalled on windows-latest,
       # but sodiumoxide will also build it from source if needed
       - name: Build (release, MSVC)
-        run: cargo build --release --target x86_64-pc-windows-msvc --bins
+        run: cd ransomware && cargo build --release --target x86_64-pc-windows-msvc --bins
 
       - name: Upload EXE
         uses: actions/upload-artifact@v4
         with:
           name: windows-exe
-          path: target/x86_64-pc-windows-msvc/release/*.exe
+          path: ransomware/target/x86_64-pc-windows-msvc/release/*.exe
