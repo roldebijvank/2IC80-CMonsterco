@@ -17,8 +17,7 @@ use windows::{
 
 fn desktop_file_path(filename: &str) -> PathBuf {
     unsafe {
-        let path: PWSTR = SHGetKnownFolderPath(&FOLDERID_Desktop, KNOWN_FOLDER_FLAG(0), None)
-                                .expect("Failed to get Desktop path");
+        let path: PWSTR = SHGetKnownFolderPath(&FOLDERID_Desktop, KNOWN_FOLDER_FLAG(0), None)?;
 
         let desktop = path.to_string().unwrap();
         PathBuf::from(desktop).join(filename)

