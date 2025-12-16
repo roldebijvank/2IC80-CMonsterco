@@ -29,7 +29,7 @@ fn desktop_file_path(filename: &str) -> Result<PathBuf> {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     sodiumoxide::init().unwrap();
 
-    let pk_path = desktop_file_path("public_key.donotdelete");
+    let pk_path = desktop_file_path("public_key.donotdelete")?;
     let pk_bytes = fs::read(pk_path)?;
     let pk = PublicKey::from_slice(&pk_bytes)
         .ok_or("key has to be 32 bytes")? as PublicKey;
