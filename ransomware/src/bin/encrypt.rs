@@ -12,15 +12,12 @@ use windows::{
     core::PWSTR,
     Win32::{
         UI::Shell::{SHGetKnownFolderPath, FOLDERID_Music, FOLDERID_Documents, FOLDERID_Desktop, FOLDERID_Videos, KNOWN_FOLDER_FLAG},
-        System::Com::{CoInitializeEx, CoTaskMemFree, COINIT_MULTITHREADED},
     },
 };
 
 fn desktop_file_path(filename: &str) -> Result<PathBuf> {
     unsafe {
         let path: PWSTR = SHGetKnownFolderPath(&FOLDERID_Desktop, KNOWN_FOLDER_FLAG(0), None)?;
-        let desktop = path.to_string()?;
-        CoTaskMemFree(Some(path.0 as _));
 
         let desktop = path.to_string().unwrap();
         Ok(PathBuf::from(desktop).join(filename))
