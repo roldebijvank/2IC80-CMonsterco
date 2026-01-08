@@ -6,24 +6,36 @@ A Rust based project demonstrating ransomware concepts and cryptographic techniq
 
 ```
 2IC80-CMonsterco/
-├── ransomware/          # Ransomware components
-│   ├── src/
-│   │   ├── main.rs     
-│   │   ├── cryptography/
-│   │   │   ├── mod.rs
-│   │   │   └── encrypt.rs    # XChaCha20Poly1305 encryption/decryption
-│   │   └── gui/
-│   │       ├── mod.rs
-│   │       └── payment.rs    # Windows payment demand window UI
-│   └── Cargo.toml
+├── ransomware/                         # Ransomware components (client)
+│   ├── Cargo.toml
+│   ├── build.rs
+│   └── src/
+│       ├── lib.rs
+│       ├── bin/
+│       │   ├── encrypt.rs             # encrypt flow
+│       │   └── decrypt.rs             # decrypt flow
+│       ├── cryptography/
+│       │   ├── mod.rs
+│       │   ├── encrypt.rs             # XChaCha20Poly1305 encryption/decryption
+│       │   ├── keys.rs                # Key parsing/handling helpers
+│       │   └── test.txt               # Sample file for testing
+│       ├── gui/
+│       │   ├── mod.rs
+│       │   └── payment.rs             # Payment demand UI
+│       └── networking/
+│           ├── mod.rs
+│           └── client.rs              # Client <-> server communications
 │
-└── server/              # Key management server
-    ├── src/
-    │   ├── main.rs    
-    │   └── cryptography/
-    │       ├── mod.rs
-    │       └── key_gen.rs    # Symmetric key generation
-    └── Cargo.toml
+├── server/                            # Key management server
+│   ├── Cargo.toml
+│   └── src/
+│       ├── lib.rs
+│       ├── main.rs
+│       └── cryptography/
+│           ├── mod.rs
+│           └── key_gen.rs             # Symmetric key generation
+│
+└── target/                          
 ```
 
 ## Components
