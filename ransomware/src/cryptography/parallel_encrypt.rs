@@ -278,7 +278,8 @@ pub async fn encryption_worker(
 
                 // Generate unique random nonce for this chunk
                 let nonce = aead::gen_nonce();
-                let nonce_bytes: [u8; 24] = (*nonce.0).as_ref().try_into().expect("Nonce has incorrect length");
+                let nonce_bytes: [u8; 24] = nonce.as_ref().try_into()?
+                    .expect("nonce has wrong length");
 
                 // Perform encryption in blocking thread pool (CPU-intensive)
                 let sym_key_clone = sym_key;
