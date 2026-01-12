@@ -1,6 +1,5 @@
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::sync::mpsc;
+use std::path::{Path};
 use anyhow::Result;
 
 use sodiumoxide::crypto::aead::xchacha20poly1305_ietf as aead;
@@ -8,14 +7,8 @@ use sodiumoxide::crypto::box_::{PublicKey, SecretKey};
 
 use crate::cryptography::keys::{encrypt_key, decrypt_key, generate_sym_key};
 
-pub fn read_to_stream(path: &Path, stream: &mut Vec<u8>) -> Result<()> {
-    let data = fs::read(path)?;
-    stream.extend_from_slice(&data);
-    Ok(())
-}
-
-pub fn encrypt_file(stream: &Vec<u8>, pk: &PublicKey) -> Result<()> {
-    
+pub fn encrypt_file(path: &Path, pk: &PublicKey) -> Result<()> {
+    let plaintext = fs::read(path)?;
 
     let (key, nonce) = generate_sym_key()?;
 
