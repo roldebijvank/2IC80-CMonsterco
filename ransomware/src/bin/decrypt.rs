@@ -3,7 +3,8 @@ use std::fs;
 
 use anyhow::Result;
 
-use c_monster_co_2ic80::cryptography::encrypt::decrypt_folder;
+// use c_monster_co_2ic80::cryptography::encrypt::decrypt_folder;
+use c_monster_co_2ic80::cryptography::decrypt_parallel::decrypt_folder_parallel;
 use c_monster_co_2ic80::networking::client::get_key;
 
 use sodiumoxide::crypto::box_::{PublicKey};
@@ -43,7 +44,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let path_str = path_ptr.to_string().unwrap();
             let path_buf: PathBuf = path_str.into();
 
-            match decrypt_folder(&path_buf, &pk, &sk) {
+            // match decrypt_folder(&path_buf, &pk, &sk) {
+            match decrypt_folder_parallel(&path_buf, &pk, &sk) {
                 Ok(_) => println!("✓ Successfully encrypted: {:?}", path_buf),
                 Err(e) => println!("✗ Error encrypting {:?}: {}", path_buf, e),
             }

