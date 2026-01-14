@@ -64,3 +64,32 @@ pub async fn get_key(pk: &PublicKey) -> Result<SecretKey, Box<dyn std::error::Er
 
     Ok(sk)
 }
+
+pub async fn mark_paid(pk: &PublicKey) -> Result<bool, Box<dyn std::error::Error>> {
+    let url = "http://172.16.96.1:3000/mark-paid";      // VM
+    // let url = "http://localhost:3000/mark-paid";       //local
+    let client = reqwest::Client::new();
+    let response = client.post(url)
+                    .json(pk)
+                    .send()
+                    .await?;
+
+    Ok(response.status().is_success())
+}
+
+//check payment status-client side
+pub async fn check_payment(pk: &PublicKey) -> Result<bool, Box<dyn std::error::Error>> {
+    let url = "http://172.16.96.1:3000/check-payment";  // VM
+    // let url = "http://localhost:3000/check-payment";   //local
+
+    let client = reqwest::Client::new();
+    let response = client.post(url)
+                    .json(pk)
+                    .send()
+                    .await?;
+    let body = response.text().await?;
+
+    let json: Value = serde_json::from_str(&body)?;
+    let has_paid = json["has_paid"].as_bool().unwrap_or(false);
+    Ok(has_paid)
+}
