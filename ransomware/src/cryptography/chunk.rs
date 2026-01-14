@@ -3,14 +3,12 @@
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU64;
 use serde::{Serialize, Deserialize};
-
-// ============================================================================
-// debug
-// ============================================================================
+use anyhow::Result;
 
 // set to false in production
 pub const DEBUG_ENABLED: bool = true;
 
+// debug logging macro that can be disabled in prod
 #[macro_export]
 macro_rules! debug_log {
     ($($arg:tt)*) => {
@@ -20,17 +18,13 @@ macro_rules! debug_log {
     };
 }
 
-// ============================================================================
-// config
-// ============================================================================
+// =================== CONFIG ===================
 
 pub const CHUNK_SIZE: usize = 4 * 1024 * 1024;         // 4 MB
 pub const SMALL_FILE_THRESHOLD: u64 = 10 * 1024 * 1024; // 10 MB
 pub const CHANNEL_BOUND: usize = 8;
 
-// ============================================================================
-// chunk metadata
-// ============================================================================
+// =================== CHUNK META ===================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChunkInfo {
@@ -39,10 +33,7 @@ pub struct ChunkInfo {
     pub nonce: [u8; 24],
 }
 
-// ============================================================================
-// file header
-// ============================================================================
-
+// =================== FILE HEADER ===================
 // format: [4 bytes: header_len][json header][chunk0][chunk1]...
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FileHeader {
@@ -54,7 +45,7 @@ pub struct FileHeader {
 }
 
 impl FileHeader {
-    pub fn to_bytes(&self) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    pub fn to_bytes(&self) -> Result<Vec<u8>> {
         let json = serde_json::to_vec(self)?;
         let len = json.len() as u32;
 
@@ -66,15 +57,15 @@ impl FileHeader {
     }
 
     // returns (header, bytes_consumed)
-    pub fn from_bytes(bytes: &[u8]) -> Result<(Self, usize), Box<dyn std::error::Error>> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<(Self, usize)> {
         if bytes.len() < 4 {
-            return Err("buffer too small".into());
+            return Err(anyhow::anyhow!("buffer too small"));
         }
 
         let len = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
 
         if bytes.len() < 4 + len {
-            return Err(format!("need {} bytes, have {}", 4 + len, bytes.len()).into());
+            return Err(anyhow::anyhow!("need {} bytes, have {}", 4 + len, bytes.len()));
         }
 
         let header: FileHeader = serde_json::from_slice(&bytes[4..4 + len])?;
@@ -82,9 +73,7 @@ impl FileHeader {
     }
 }
 
-// ============================================================================
-// pipeline messages
-// ============================================================================
+// =================== PIPELINE MESSAGES ===================
 
 #[derive(Debug)]
 pub enum ReadMessage {
@@ -130,9 +119,7 @@ pub struct EncryptedChunk {
     pub is_last: bool,
 }
 
-// ============================================================================
-// file task
-// ============================================================================
+// =================== FILE TASK ===================
 
 #[derive(Debug, Clone)]
 pub struct FileTask {
@@ -143,10 +130,7 @@ pub struct FileTask {
     pub should_chunk: bool,
 }
 
-// ============================================================================
-// stats
-// ============================================================================
-
+// stats (unused for now)
 #[derive(Debug, Default)]
 pub struct EncryptionStats {
     pub files_processed: AtomicU64,
@@ -180,10 +164,7 @@ impl EncryptionStats {
     }
 }
 
-// ============================================================================
 // progress callback
-// ============================================================================
-
 // set to None to disable
 pub type ProgressCallback = Option<Box<dyn Fn(u64, u64, u64) + Send + Sync>>;
 

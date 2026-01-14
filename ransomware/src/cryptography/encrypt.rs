@@ -3,9 +3,9 @@ use std::path::{Path};
 use anyhow::Result;
 
 use sodiumoxide::crypto::aead::xchacha20poly1305_ietf as aead;
-use sodiumoxide::crypto::box_::{PublicKey, SecretKey};
+use sodiumoxide::crypto::box_::{PublicKey};
 
-use crate::cryptography::keys::{encrypt_key, decrypt_key, generate_sym_key};
+use crate::cryptography::keys::{encrypt_key, generate_sym_key};
 
 pub fn encrypt_file(path: &Path, pk: &PublicKey) -> Result<()> {
     let plaintext = fs::read(path)?;

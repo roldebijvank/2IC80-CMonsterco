@@ -3,6 +3,8 @@
 use std::collections::{HashMap, BTreeMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::pin::Pin;
+use std::future::Future;
 
 use anyhow::Result;
 use sodiumoxide::crypto::aead::xchacha20poly1305_ietf as aead;
@@ -42,55 +44,57 @@ pub async fn discover_files(
 }
 
 // for each file found, create a FileTask
-async fn discover_files_recursive(
-    root: &Path,
-    current: &Path,
+fn discover_files_recursive<'a>(
+    root: &'a Path,
+    current: &'a Path,
     mode: FileSearchMode,
-    tasks: &mut Vec<FileTask>,
-    file_id: &mut u64,
-) -> Result<()> {
-    if current.is_file() {
-        let is_enc = current.extension().map_or(false, |e| e == "enc");
-        
-        let should_consider = match mode {
-            FileSearchMode::ForEncryption => !is_enc,
-            FileSearchMode::ForDecryption => is_enc,
-        };
-        
-        if should_consider {
-            let metadata = tokio::fs::metadata(current).await?;
-            let size = metadata.len();
+    tasks: &'a mut Vec<FileTask>,
+    file_id: &'a mut u64,
+) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
+    Box::pin(async move {
+        if current.is_file() {
+            let is_enc = current.extension().map_or(false, |e| e == "enc");
             
-            let output_path = match mode {
-                FileSearchMode::ForEncryption => {
-                    PathBuf::from(format!("{}.enc", current.to_string_lossy()))
-                }
-                FileSearchMode::ForDecryption => {
-                    // output determined by header, use placeholder
-                    current.with_extension("")
-                }
+            let should_consider = match mode {
+                FileSearchMode::ForEncryption => !is_enc,
+                FileSearchMode::ForDecryption => is_enc,
             };
             
-            let should_chunk = size > SMALL_FILE_THRESHOLD;
-            
-            tasks.push(FileTask {
-                file_id: *file_id,
-                original_path: current.to_path_buf(),
-                output_path,
-                size,
-                should_chunk,
-            });
-            
-            *file_id += 1;
+            if should_consider {
+                let metadata = tokio::fs::metadata(current).await?;
+                let size = metadata.len();
+                
+                let output_path = match mode {
+                    FileSearchMode::ForEncryption => {
+                        PathBuf::from(format!("{}.enc", current.to_string_lossy()))
+                    }
+                    FileSearchMode::ForDecryption => {
+                        // output determined by header, use placeholder
+                        current.with_extension("")
+                    }
+                };
+                
+                let should_chunk = size > SMALL_FILE_THRESHOLD;
+                
+                tasks.push(FileTask {
+                    file_id: *file_id,
+                    original_path: current.to_path_buf(),
+                    output_path,
+                    size,
+                    should_chunk,
+                });
+                
+                *file_id += 1;
+            }
+        } else if current.is_dir() {
+            let mut entries = tokio::fs::read_dir(current).await?;
+            while let Some(entry) = entries.next_entry().await? {
+                discover_files_recursive(root, &entry.path(), mode, tasks, file_id).await?;
+            }
         }
-    } else if current.is_dir() {
-        let mut entries = tokio::fs::read_dir(current).await?;
-        while let Some(entry) = entries.next_entry().await? {
-            discover_files_recursive(root, &entry.path(), mode, tasks, file_id).await?;
-        }
-    }
-    
-    Ok(())
+        
+        Ok(())
+    })
 }
 
 // ================== FILE READER ==================
@@ -330,7 +334,6 @@ pub fn spawn_workers_encrypt(
 }
 
 // ================== FILE WRITER ==================
-
 // tracks state for a file being written
 pub struct FileWriteState {
     pub output_path: PathBuf,
