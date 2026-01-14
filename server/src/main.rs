@@ -53,8 +53,9 @@ async fn mark_paid(
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     paid.lock().unwrap().insert(pk);
     println!("Victim marked as paid!");
-    Ok(Json(serde_json::json!({"status": "marked_as_paid"})))}
-    
+    Ok(Json(serde_json::json!({"status": "marked_as_paid"})))
+}
+
 //check for the payment status
 async fn check_payment(
     State((_, paid)): State<(VictimsDB, PaidVictims)>,
@@ -62,7 +63,8 @@ async fn check_payment(
 ) -> Json<serde_json::Value> {
     let has_paid = paid.lock().unwrap().contains(&pk);
     println!("Payment check for victim: {}", has_paid);
-    Json(serde_json::json!({"has_paid": has_paid}))}
+    Json(serde_json::json!({"has_paid": has_paid}))
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

