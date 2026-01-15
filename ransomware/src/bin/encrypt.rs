@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::fs;
+use std::io::{self, Write};
 
 use anyhow::Result;
 
@@ -52,6 +53,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             fs::write(out_path, &pk)?;
         }
     }
+
+    println!("\nPress Enter to exit...");
+    io::stdout().flush()?;
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
 
     Ok(())
 }

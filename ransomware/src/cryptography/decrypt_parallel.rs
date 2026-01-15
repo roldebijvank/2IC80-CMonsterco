@@ -5,7 +5,7 @@ use anyhow::Result;
 use sodiumoxide::crypto::aead::xchacha20poly1305_ietf as aead;
 use sodiumoxide::crypto::box_::{PublicKey, SecretKey};
 
-use crate::cryptography::keys::{encrypt_key, decrypt_key, generate_sym_key};
+use crate::cryptography::keys::{decrypt_key};
 
 pub fn decrypt_file(path: &Path, pk: &PublicKey, sk: &SecretKey) -> Result<(), Box<dyn std::error::Error>> {
     // remove extension (remove .enc)
