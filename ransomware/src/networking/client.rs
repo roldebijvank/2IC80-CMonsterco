@@ -2,10 +2,13 @@ use serde_json::{Value};
 
 use sodiumoxide::crypto::box_::{PublicKey, SecretKey};
 
+// Change this URL to match your server location
+// const SERVER_URL: &str = "http://localhost:3000";        //  local
+const SERVER_URL: &str = "http://192.168.241.1:3000";       //  VM
+// const SERVER_URL: &str = "http://172.16.96.1:3000";      // alternative VM IP
+
 pub async fn gen_key() -> Result<PublicKey, Box<dyn std::error::Error>> {
-    // let url = "http://172.16.96.1:3000/gen-key";     // ip for VM
-    let url = "http://192.168.241.1:3000/gen-key";
-    // let url = "http://localhost:3000/gen-key";          // for local
+    let url = format!("{}/gen-key", SERVER_URL);
 
     let client = reqwest::Client::new();
     let response = client.get(url)
@@ -34,9 +37,7 @@ pub async fn gen_key() -> Result<PublicKey, Box<dyn std::error::Error>> {
 }
 
 pub async fn get_key(pk: &PublicKey) -> Result<SecretKey, Box<dyn std::error::Error>> {
-    // let url = "http://172.16.96.1:3000/get-key";        // ip for VM
-    let url = "http://192.168.241.1:3000/get-key";
-    // let url = "http://localhost:3000/get-key";       // for local
+    let url = format!("{}/get-key", SERVER_URL);
 
     let client = reqwest::Client::new();
     let response = client.post(url)
@@ -68,8 +69,7 @@ pub async fn get_key(pk: &PublicKey) -> Result<SecretKey, Box<dyn std::error::Er
 }
 
 pub async fn mark_paid(pk: &PublicKey) -> Result<bool, Box<dyn std::error::Error>> {
-    let url = "http://172.16.96.1:3000/mark-paid";      // VM
-    // let url = "http://localhost:3000/mark-paid";       //local
+    let url = format!("{}/mark-paid", SERVER_URL);
     let client = reqwest::Client::new();
     let response = client.post(url)
                     .json(pk)
@@ -81,9 +81,7 @@ pub async fn mark_paid(pk: &PublicKey) -> Result<bool, Box<dyn std::error::Error
 
 //check payment status-client side
 pub async fn check_payment(pk: &PublicKey) -> Result<bool, Box<dyn std::error::Error>> {
-    let url = "http://172.16.96.1:3000/check-payment";  // VM
-    // let url = "http://localhost:3000/check-payment";   //local
-
+    let url = format!("{}/check-payment", SERVER_URL);
     let client = reqwest::Client::new();
     let response = client.post(url)
                     .json(pk)
