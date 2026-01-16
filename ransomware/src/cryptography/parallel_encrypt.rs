@@ -12,7 +12,10 @@ use sodiumoxide::crypto::box_::PublicKey;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{Mutex, mpsc};
+<<<<<<<<< Temporary merge branch 1
+=========
 use uuid::Uuid;
+>>>>>>>>> Temporary merge branch 2
 
 use crate::cryptography::chunk::{
     CHANNEL_BOUND, CHUNK_SIZE, ChunkInfo, EncryptedChunk, FileHeader, FileTask, ReadMessage,
@@ -36,7 +39,12 @@ pub enum FileSearchMode {
 // discovers files recursively based on mode
 pub async fn discover_files(folder_path: &Path, mode: FileSearchMode) -> Result<Vec<FileTask>> {
     let mut tasks = Vec::new();
+<<<<<<<<< Temporary merge branch 1
+    let mut file_id = 0u64;
+    discover_files_recursive(folder_path, folder_path, mode, &mut tasks, &mut file_id).await?;
+=========
     discover_files_recursive(folder_path, folder_path, mode, &mut tasks).await?;
+>>>>>>>>> Temporary merge branch 2
     Ok(tasks)
 }
 
@@ -46,6 +54,10 @@ fn discover_files_recursive<'a>(
     current: &'a Path,
     mode: FileSearchMode,
     tasks: &'a mut Vec<FileTask>,
+<<<<<<<<< Temporary merge branch 1
+    file_id: &'a mut u64,
+=========
+>>>>>>>>> Temporary merge branch 2
 ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
     Box::pin(async move {
         if current.is_file() {
@@ -72,27 +84,40 @@ fn discover_files_recursive<'a>(
 
                 let should_chunk = size > SMALL_FILE_THRESHOLD;
 
+<<<<<<<<< Temporary merge branch 1
+                tasks.push(FileTask {
+                    file_id: *file_id,
+=========
                 let file_id = Uuid::new_v4();
 
                 tasks.push(FileTask {
                     file_id,
+>>>>>>>>> Temporary merge branch 2
                     original_path: current.to_path_buf(),
                     output_path,
                     size,
                     should_chunk,
                 });
 
+<<<<<<<<< Temporary merge branch 1
+                *file_id += 1;
+=========
                 debug_log!(
                     "discovered file {}: {:?} ({} bytes)",
                     file_id,
                     current,
                     size
                 );
+>>>>>>>>> Temporary merge branch 2
             }
         } else if current.is_dir() {
             let mut entries = tokio::fs::read_dir(current).await?;
             while let Some(entry) = entries.next_entry().await? {
+<<<<<<<<< Temporary merge branch 1
+                discover_files_recursive(root, &entry.path(), mode, tasks, file_id).await?;
+=========
                 discover_files_recursive(root, &entry.path(), mode, tasks).await?;
+>>>>>>>>> Temporary merge branch 2
             }
         }
 
@@ -104,12 +129,20 @@ fn discover_files_recursive<'a>(
 // code for file reading workers.
 
 // reads a file and sends chunks to encryption pipeline
+<<<<<<<<< Temporary merge branch 1
+pub async fn worker_read(
+    task: FileTask,
+    tx: mpsc::Sender<ReadMessage>,
+) -> Result<()> {
+    debug_log!("reader: opening {:?}", task.original_path);
+=========
 pub async fn worker_read(task: FileTask, tx: mpsc::Sender<ReadMessage>) -> Result<()> {
     debug_log!(
         "reader [{}]: opening {:?}",
         task.file_id,
         task.original_path
     );
+>>>>>>>>> Temporary merge branch 2
 
     let mut file = File::open(&task.original_path).await?;
 
@@ -125,6 +158,9 @@ pub async fn worker_read(task: FileTask, tx: mpsc::Sender<ReadMessage>) -> Resul
             is_last: true,
         })
         .await
+<<<<<<<<< Temporary merge branch 1
+        .map_err(|_| anyhow::anyhow!("channel closed"))?;
+=========
         .map_err(|_| anyhow::anyhow!("channel closed while sending chunk"))?;
 
         debug_log!(
@@ -132,6 +168,7 @@ pub async fn worker_read(task: FileTask, tx: mpsc::Sender<ReadMessage>) -> Resul
             task.file_id,
             task.size
         );
+>>>>>>>>> Temporary merge branch 2
     } else {
         // large file - chunk it
         let mut sequence = 0u32;
@@ -147,11 +184,18 @@ pub async fn worker_read(task: FileTask, tx: mpsc::Sender<ReadMessage>) -> Resul
             let chunk_data = buffer[..bytes_read].to_vec();
 
             debug_log!(
+<<<<<<<<< Temporary merge branch 1
+                "reader: chunk {} for file {} ({} bytes)",
+                sequence,
+                task.file_id,
+                bytes_read
+=========
                 "reader [{}]: sending chunk {} ({} bytes, last={})",
                 task.file_id,
                 sequence,
                 bytes_read,
                 is_last
+>>>>>>>>> Temporary merge branch 2
             );
 
             tx.send(ReadMessage::Chunk {
@@ -161,7 +205,11 @@ pub async fn worker_read(task: FileTask, tx: mpsc::Sender<ReadMessage>) -> Resul
                 is_last,
             })
             .await
+<<<<<<<<< Temporary merge branch 1
+            .map_err(|_| anyhow::anyhow!("channel closed"))?;
+=========
             .map_err(|_| anyhow::anyhow!("channel closed while sending chunk {}", sequence))?;
+>>>>>>>>> Temporary merge branch 2
 
             sequence += 1;
             if is_last {
@@ -175,9 +223,15 @@ pub async fn worker_read(task: FileTask, tx: mpsc::Sender<ReadMessage>) -> Resul
         original_path: task.original_path.clone(),
     })
     .await
+<<<<<<<<< Temporary merge branch 1
+    .map_err(|_| anyhow::anyhow!("channel closed"))?;
+
+    debug_log!("reader: done with file {}", task.file_id);
+=========
     .map_err(|_| anyhow::anyhow!("channel closed while sending FileComplete"))?;
 
     debug_log!("reader [{}]: completed", task.file_id);
+>>>>>>>>> Temporary merge branch 2
     Ok(())
 }
 
@@ -232,7 +286,11 @@ pub async fn worker_encrypt(
     mut rx: mpsc::Receiver<ReadMessage>,
     tx: mpsc::Sender<EncryptedChunk>,
     pk: PublicKey,
+<<<<<<<<< Temporary merge branch 1
+    contexts: Arc<Mutex<HashMap<u64, FileEncryptionContext>>>,
+=========
     contexts: Arc<Mutex<HashMap<Uuid, FileEncryptionContext>>>,
+>>>>>>>>> Temporary merge branch 2
 ) -> Result<()> {
     debug_log!("encrypt worker {}: started", id);
 
@@ -247,11 +305,15 @@ pub async fn worker_encrypt(
                 let sym_key = {
                     let mut ctx = contexts.lock().await;
                     let entry = ctx.entry(file_id).or_insert_with(|| {
+<<<<<<<<< Temporary merge branch 1
+                        debug_log!("encrypt worker {}: new context for file {}", id, file_id);
+=========
                         debug_log!(
                             "encrypt worker {}: created new context for file [{}]",
                             id,
                             file_id
                         );
+>>>>>>>>> Temporary merge branch 2
                         let (key, _) = generate_sym_key().expect("keygen failed");
                         let enc_key = encrypt_key(&pk, key.clone()).expect("key encrypt failed");
                         FileEncryptionContext {
@@ -270,13 +332,22 @@ pub async fn worker_encrypt(
 
                 let key_clone = sym_key;
                 let nonce_clone = nonce;
+<<<<<<<<< Temporary merge branch 1
+=========
                 let data_len = data.len();
+>>>>>>>>> Temporary merge branch 2
                 let encrypted = tokio::task::spawn_blocking(move || {
                     aead::seal(&data, None, &nonce_clone, &key_clone)
                 })
                 .await?;
 
                 debug_log!(
+<<<<<<<<< Temporary merge branch 1
+                    "encrypt worker {}: chunk {} of file {} done",
+                    id,
+                    sequence,
+                    file_id
+=========
                     "encrypt worker {}: encrypted chunk {} of file [{}] ({} -> {} bytes, last={})",
                     id,
                     sequence,
@@ -284,6 +355,7 @@ pub async fn worker_encrypt(
                     data_len,
                     encrypted.len(),
                     is_last
+>>>>>>>>> Temporary merge branch 2
                 );
 
                 tx.send(EncryptedChunk {
@@ -294,12 +366,16 @@ pub async fn worker_encrypt(
                     is_last,
                 })
                 .await
+<<<<<<<<< Temporary merge branch 1
+                .map_err(|_| anyhow::anyhow!("channel closed"))?;
+=========
                 .map_err(|_| {
                     anyhow::anyhow!(
                         "worker {}: channel closed while sending encrypted chunk",
                         id
                     )
                 })?;
+>>>>>>>>> Temporary merge branch 2
             }
             ReadMessage::FileComplete { .. } => {
                 // ignored - writer uses is_last flag
@@ -317,7 +393,11 @@ pub fn spawn_workers_encrypt(
     mut rx: mpsc::Receiver<ReadMessage>,
     tx: mpsc::Sender<EncryptedChunk>,
     pk: PublicKey,
+<<<<<<<<< Temporary merge branch 1
+    contexts: Arc<Mutex<HashMap<u64, FileEncryptionContext>>>,
+=========
     contexts: Arc<Mutex<HashMap<Uuid, FileEncryptionContext>>>,
+>>>>>>>>> Temporary merge branch 2
 ) -> tokio::task::JoinHandle<Result<()>> {
     debug_log!("encrypt dispatcher: spawning {} workers", num_workers);
 
@@ -438,8 +518,13 @@ impl FileWriteState {
     }
 
     // writes header + chunks to output file
+<<<<<<<<< Temporary merge branch 1
+    pub async fn finalize(&self) -> Result<()> {
+        debug_log!("writer: finalizing {:?}", self.original_path);
+=========
     pub async fn finalize(&self, file_id: Uuid) -> Result<()> {
         debug_log!("writer [{}]: finalizing {:?}", file_id, self.original_path);
+>>>>>>>>> Temporary merge branch 2
 
         let chunk_infos: Vec<ChunkInfo> = self
             .chunks
@@ -461,6 +546,21 @@ impl FileWriteState {
 
         let header_bytes = header.to_bytes()?;
 
+<<<<<<<<< Temporary merge branch 1
+        let mut file = File::create(&self.output_path).await?;
+        file.write_all(&header_bytes).await?;
+
+        for (_, chunk) in &self.chunks {
+            file.write_all(&chunk.data).await?;
+        }
+
+        file.flush().await?;
+
+        // delete original only after successful write
+        tokio::fs::remove_file(&self.original_path).await?;
+
+        debug_log!("writer: done with {:?}", self.original_path);
+=========
         debug_log!(
             "writer [{}]: creating output file {:?}",
             file_id,
@@ -513,39 +613,63 @@ impl FileWriteState {
             })?;
 
         debug_log!("writer [{}]: completed {:?}", file_id, self.original_path);
+>>>>>>>>> Temporary merge branch 2
         Ok(())
     }
 }
 
 // file metadata: (output_path, original_path, relative_name, size)
+<<<<<<<<< Temporary merge branch 1
+pub type FileMetadata = HashMap<u64, (PathBuf, PathBuf, String, u64)>;
+=========
 pub type FileMetadata = HashMap<Uuid, (PathBuf, PathBuf, String, u64)>;
+>>>>>>>>> Temporary merge branch 2
 
 // writes encrypted chunks to files
 pub async fn worker_write(
     mut rx: mpsc::Receiver<EncryptedChunk>,
     metadata: Arc<Mutex<FileMetadata>>,
+<<<<<<<<< Temporary merge branch 1
+    contexts: Arc<Mutex<HashMap<u64, FileEncryptionContext>>>,
+) -> Result<()> {
+    debug_log!("writer: started");
+
+    let mut states: HashMap<u64, FileWriteState> = HashMap::new();
+=========
     contexts: Arc<Mutex<HashMap<Uuid, FileEncryptionContext>>>,
 ) -> Result<()> {
     debug_log!("writer: started");
 
     let mut states: HashMap<Uuid, FileWriteState> = HashMap::new();
+>>>>>>>>> Temporary merge branch 2
 
     while let Some(chunk) = rx.recv().await {
         let file_id = chunk.file_id;
 
         // create state if needed
         if !states.contains_key(&file_id) {
+<<<<<<<<< Temporary merge branch 1
+            let meta = metadata.lock().await;
+            let (output, original, relative, size) = meta
+                .get(&file_id)
+                .ok_or_else(|| anyhow::anyhow!("no metadata for file {}", file_id))?
+=========
             debug_log!("writer: creating state for file [{}]", file_id);
             let meta = metadata.lock().await;
             let (output, original, relative, size) = meta
                 .get(&file_id)
                 .ok_or_else(|| anyhow::anyhow!("no metadata for file [{}]", file_id))?
+>>>>>>>>> Temporary merge branch 2
                 .clone();
 
             let ctx = contexts.lock().await;
             let enc_key = ctx
                 .get(&file_id)
+<<<<<<<<< Temporary merge branch 1
+                .ok_or_else(|| anyhow::anyhow!("no context for file {}", file_id))?
+=========
                 .ok_or_else(|| anyhow::anyhow!("no context for file [{}]", file_id))?
+>>>>>>>>> Temporary merge branch 2
                 .encrypted_sym_key
                 .clone();
 
@@ -556,6 +680,12 @@ pub async fn worker_write(
         }
 
         let state = states.get_mut(&file_id).unwrap();
+<<<<<<<<< Temporary merge branch 1
+        state.add_chunk(chunk);
+
+        if state.is_complete() {
+            state.finalize().await?;
+=========
         debug_log!(
             "writer [{}]: received chunk {} (last={})",
             file_id,
@@ -570,6 +700,7 @@ pub async fn worker_write(
                 file_id
             );
             state.finalize(file_id).await?;
+>>>>>>>>> Temporary merge branch 2
             states.remove(&file_id);
 
             let mut ctx = contexts.lock().await;
@@ -590,9 +721,17 @@ pub async fn worker_write(
 pub fn spawn_workers_write(
     rx: mpsc::Receiver<EncryptedChunk>,
     metadata: Arc<Mutex<FileMetadata>>,
+<<<<<<<<< Temporary merge branch 1
+    contexts: Arc<Mutex<HashMap<u64, FileEncryptionContext>>>,
+) -> tokio::task::JoinHandle<Result<()>> {
+    tokio::spawn(async move {
+        worker_write(rx, metadata, contexts).await
+    })
+=========
     contexts: Arc<Mutex<HashMap<Uuid, FileEncryptionContext>>>,
 ) -> tokio::task::JoinHandle<Result<()>> {
     tokio::spawn(async move { worker_write(rx, metadata, contexts).await })
+>>>>>>>>> Temporary merge branch 2
 }
 
 // ================== ENCRYPTION ENTRYPOINT ==================
@@ -625,7 +764,11 @@ pub async fn encrypt_folder_parallel(
 
     // shared state
     let metadata: Arc<Mutex<FileMetadata>> = Arc::new(Mutex::new(HashMap::new()));
+<<<<<<<<< Temporary merge branch 1
+    let contexts: Arc<Mutex<HashMap<u64, FileEncryptionContext>>> =
+=========
     let contexts: Arc<Mutex<HashMap<Uuid, FileEncryptionContext>>> =
+>>>>>>>>> Temporary merge branch 2
         Arc::new(Mutex::new(HashMap::new()));
 
     // populate metadata
@@ -677,4 +820,8 @@ pub async fn encrypt_folder_parallel(
 
     debug_log!("encryption completed for {:?}", folder_path);
     Ok(())
+<<<<<<<<< Temporary merge branch 1
 }
+=========
+}
+>>>>>>>>> Temporary merge branch 2
