@@ -65,7 +65,7 @@ pub async fn get_key(pk: &PublicKey) -> Result<SecretKey, Box<dyn std::error::Er
 async fn get_key_internal(
     url: &str,
     pk: &PublicKey,
-) -> Result<SecretKey, Box<dyn std::error::Error>> {
+) -> Result<SecretKey, Box<dyn std::error::Error + Send + Sync>> {
     let client = reqwest::Client::new();
     let response = client.post(url)
                     .json(pk)

