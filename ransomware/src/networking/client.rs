@@ -1,4 +1,5 @@
 use serde_json::Value;
+use serde_json::Value;
 use sodiumoxide::crypto::box_::{PublicKey, SecretKey};
 use crate::debug_log;
 
@@ -7,9 +8,22 @@ use crate::debug_log;
 const SERVER_URL: &str = "http://192.168.241.1:3000";       //  VM
 // const SERVER_URL: &str = "http://172.16.96.1:3000";      // alternative VM IP
 
+<<<<<<<<< Temporary merge branch 1
 pub async fn gen_key() -> Result<PublicKey, Box<dyn std::error::Error>> {
     let url = format!("{}/gen-key", SERVER_URL);
 
+=========
+use crate::debug_log;
+
+// single ip address used across the system
+// const SERVER_IP: &str = "172.16.96.1:3000";     // ip for VM
+const SERVER_IP: &str = "host.containers.internal:3000";
+// const SERVER_IP: &str = "localhost:3000";       // for local
+
+pub async fn gen_key() -> Result<PublicKey, Box<dyn std::error::Error>> {
+    let url = format!("http://{}/gen-key", SERVER_IP);
+
+>>>>>>>>> Temporary merge branch 2
     loop {
         match gen_key_internal(&url).await {
             Ok(pk) => return Ok(pk),
@@ -49,7 +63,11 @@ async fn gen_key_internal(url: &str) -> Result<PublicKey, Box<dyn std::error::Er
 }
 
 pub async fn get_key(pk: &PublicKey) -> Result<SecretKey, Box<dyn std::error::Error>> {
+<<<<<<<<< Temporary merge branch 1
     let url = format!("{}/get-key", SERVER_URL);
+=========
+    let url = format!("http://{}/get-key", SERVER_IP);
+>>>>>>>>> Temporary merge branch 2
 
     loop {
         match get_key_internal(&url, pk).await {
@@ -94,6 +112,7 @@ async fn get_key_internal(
 
     Ok(sk)
 }
+<<<<<<<<< Temporary merge branch 1
 
 pub async fn mark_paid(pk: &PublicKey) -> Result<bool, Box<dyn std::error::Error>> {
     let url = format!("{}/mark-paid", SERVER_URL);
@@ -120,3 +139,5 @@ pub async fn check_payment(pk: &PublicKey) -> Result<bool, Box<dyn std::error::E
     let has_paid = json["has_paid"].as_bool().unwrap_or(false);
     Ok(has_paid)
 }
+=========
+>>>>>>>>> Temporary merge branch 2
