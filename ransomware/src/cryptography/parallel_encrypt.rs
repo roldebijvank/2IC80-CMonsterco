@@ -114,6 +114,7 @@ pub async fn worker_read(
         let mut data = Vec::with_capacity(task.size as usize);
         file.read_to_end(&mut data).await?;
 
+        debug_log!("READER: sending chunk file_id={} seq=0 is_last=true size={}", task.file_id, data.len());
         tx.send(ReadMessage::Chunk {
             file_id: task.file_id,
             sequence: 0,
@@ -128,13 +129,23 @@ pub async fn worker_read(
         loop {
             let bytes_read = read_full(&mut file, &mut buffer).await?;
             if bytes_read == 0 {
+                // If the file size is an exact multiple of CHUNK_SIZE, send a final empty chunk with is_last=true
+                if sequence > 0 {
+                    debug_log!("READER: sending FINAL empty chunk file_id={} seq={} is_last=true size=0", task.file_id, sequence);
+                    tx.send(ReadMessage::Chunk {
+                        file_id: task.file_id,
+                        sequence,
+                        data: Vec::new(),
+                        is_last: true,
+                    }).await.map_err(|_| anyhow::anyhow!("channel closed"))?;
+                }
                 break;
             }
 
             let is_last = bytes_read < CHUNK_SIZE;
             let chunk_data = buffer[..bytes_read].to_vec();
 
-            debug_log!("reader: chunk {} for file {} ({} bytes)", sequence, task.file_id, bytes_read);
+            debug_log!("READER: sending chunk file_id={} seq={} is_last={} size={}", task.file_id, sequence, is_last, bytes_read);
 
             tx.send(ReadMessage::Chunk {
                 file_id: task.file_id,
@@ -217,6 +228,7 @@ pub async fn worker_encrypt(
     while let Some(msg) = rx.recv().await {
         match msg {
             ReadMessage::Chunk { file_id, sequence, data, is_last } => {
+                debug_log!("ENCRYPT: got chunk file_id={} seq={} is_last={} size={}", file_id, sequence, is_last, data.len());
                 let sym_key = {
                     let mut ctx = contexts.lock().await;
                     let entry = ctx.entry(file_id).or_insert_with(|| {
@@ -251,6 +263,7 @@ pub async fn worker_encrypt(
                     nonce: nonce_bytes,
                     is_last,
                 }).await.map_err(|_| anyhow::anyhow!("channel closed"))?;
+                debug_log!("ENCRYPT: sent chunk file_id={} seq={} is_last={}", file_id, sequence, is_last);
             }
             ReadMessage::FileComplete { .. } => {
                 // ignored - writer uses is_last flag
@@ -273,6 +286,7 @@ pub fn spawn_workers_encrypt(
     debug_log!("encrypt dispatcher: spawning {} workers", num_workers);
 
     tokio::spawn(async move {
+
         let (worker_txs, worker_rxs): (Vec<_>, Vec<_>) = (0..num_workers)
             .map(|_| mpsc::channel::<ReadMessage>(CHANNEL_BOUND))
             .unzip();
@@ -288,20 +302,26 @@ pub fn spawn_workers_encrypt(
         }
         drop(tx);
 
-        // round-robin dispatch
-        let mut next = 0;
+        // consistent hashing: always send the same file_id to the same worker
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
         while let Some(msg) = rx.recv().await {
             match &msg {
-                ReadMessage::FileComplete { .. } => {
-                    for wtx in &worker_txs {
-                        let _ = wtx.send(msg.clone()).await;
-                    }
+                ReadMessage::FileComplete { file_id, .. } => {
+                    // send FileComplete to the same worker as the file's chunks
+                    let mut hasher = DefaultHasher::new();
+                    file_id.hash(&mut hasher);
+                    let idx = (hasher.finish() as usize) % worker_txs.len();
+                    let _ = worker_txs[idx].send(msg.clone()).await;
                 }
-                ReadMessage::Chunk { .. } => {
-                    if worker_txs[next].send(msg).await.is_err() {
-                        return Err(anyhow::anyhow!("worker {} channel closed", next));
+                ReadMessage::Chunk { file_id, .. } => {
+                    let mut hasher = DefaultHasher::new();
+                    file_id.hash(&mut hasher);
+                    let idx = (hasher.finish() as usize) % worker_txs.len();
+                    if worker_txs[idx].send(msg).await.is_err() {
+                        return Err(anyhow::anyhow!("worker {} channel closed", idx));
                     }
-                    next = (next + 1) % num_workers;
                 }
             }
         }
@@ -443,6 +463,8 @@ pub async fn worker_write(
     while let Some(chunk) = rx.recv().await {
         let file_id = chunk.file_id;
 
+        debug_log!("WRITER: got chunk file_id={} seq={} is_last={}", file_id, chunk.sequence, chunk.is_last);
+
         // create state if needed
         if !states.contains_key(&file_id) {
             let meta = metadata.lock().await;
@@ -461,7 +483,10 @@ pub async fn worker_write(
         let state = states.get_mut(&file_id).unwrap();
         state.add_chunk(chunk);
 
+        debug_log!("WRITER: file_id={} chunk_count={} total_chunks={:?}", file_id, state.chunks.len(), state.total_chunks);
+
         if state.is_complete() {
+            debug_log!("WRITER: file_id={} is complete, finalizing", file_id);
             state.finalize().await?;
             states.remove(&file_id);
 
