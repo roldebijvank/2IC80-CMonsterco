@@ -5,7 +5,7 @@ use crate::debug_log;
 
 // single ip address used across the system
 // const SERVER_IP: &str = "172.16.96.1:3000";     // ip for VM
-const SERVER_IP: &str = "10.89.0.1:3000";
+const SERVER_IP: &str = "host.containers.internal:3000";
 // const SERVER_IP: &str = "localhost:3000";       // for local
 
 pub async fn gen_key() -> Result<PublicKey, Box<dyn std::error::Error>> {
