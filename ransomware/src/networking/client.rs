@@ -1,11 +1,28 @@
-use serde_json::{Value};
-
+use serde_json::Value;
 use sodiumoxide::crypto::box_::{PublicKey, SecretKey};
 
-pub async fn gen_key() -> Result<PublicKey, Box<dyn std::error::Error>> {
-    let url = "http://172.16.96.1:3000/gen-key";     // ip for VM
-    // let url = "http://localhost:3000/gen-key";          // for local
+use crate::debug_log;
 
+// single ip address used across the system
+// const SERVER_IP: &str = "172.16.96.1:3000";     // ip for VM
+const SERVER_IP: &str = "10.89.0.1:3000";
+// const SERVER_IP: &str = "localhost:3000";       // for local
+
+pub async fn gen_key() -> Result<PublicKey, Box<dyn std::error::Error>> {
+    let url = format!("http://{}/gen-key", SERVER_IP);
+
+    loop {
+        match gen_key_internal(&url).await {
+            Ok(pk) => return Ok(pk),
+            Err(_) => {
+                debug_log!("failed to connect to server.");
+                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+            }
+        }
+    }
+}
+
+async fn gen_key_internal(url: &str) -> Result<PublicKey, Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
     let response = client.get(url)
                     .send()
@@ -33,9 +50,23 @@ pub async fn gen_key() -> Result<PublicKey, Box<dyn std::error::Error>> {
 }
 
 pub async fn get_key(pk: &PublicKey) -> Result<SecretKey, Box<dyn std::error::Error>> {
-    let url = "http://172.16.96.1:3000/get-key";        // ip for VM
-    // let url = "http://localhost:3000/get-key";       // for local
+    let url = format!("http://{}/get-key", SERVER_IP);
 
+    loop {
+        match get_key_internal(&url, pk).await {
+            Ok(sk) => return Ok(sk),
+            Err(_) => {
+                debug_log!("failed to connect to server.");
+                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+            }
+        }
+    }
+}
+
+async fn get_key_internal(
+    url: &str,
+    pk: &PublicKey,
+) -> Result<SecretKey, Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
     let response = client.post(url)
                     .json(pk)
@@ -43,7 +74,7 @@ pub async fn get_key(pk: &PublicKey) -> Result<SecretKey, Box<dyn std::error::Er
                     .await?;
     let body = response.text().await?;
 
-    println!("body: {:?}", &body);
+    debug_log!("body: {:?}", &body);
 
     let json: Value = serde_json::from_str(&body)?;
     let arr = json["sk"]
