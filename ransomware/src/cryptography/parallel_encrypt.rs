@@ -12,6 +12,7 @@ use sodiumoxide::crypto::box_::PublicKey;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{Mutex, mpsc};
+use uuid::Uuid;
 
 use crate::cryptography::chunk::{
     CHANNEL_BOUND, CHUNK_SIZE, ChunkInfo, EncryptedChunk, FileHeader, FileTask, ReadMessage,
@@ -35,8 +36,7 @@ pub enum FileSearchMode {
 // discovers files recursively based on mode
 pub async fn discover_files(folder_path: &Path, mode: FileSearchMode) -> Result<Vec<FileTask>> {
     let mut tasks = Vec::new();
-    let mut file_id = 0u64;
-    discover_files_recursive(folder_path, folder_path, mode, &mut tasks, &mut file_id).await?;
+    discover_files_recursive(folder_path, folder_path, mode, &mut tasks).await?;
     Ok(tasks)
 }
 
@@ -46,7 +46,6 @@ fn discover_files_recursive<'a>(
     current: &'a Path,
     mode: FileSearchMode,
     tasks: &'a mut Vec<FileTask>,
-    file_id: &'a mut u64,
 ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
     Box::pin(async move {
         if current.is_file() {
@@ -73,20 +72,27 @@ fn discover_files_recursive<'a>(
 
                 let should_chunk = size > SMALL_FILE_THRESHOLD;
 
+                let file_id = Uuid::new_v4();
+
                 tasks.push(FileTask {
-                    file_id: *file_id,
+                    file_id,
                     original_path: current.to_path_buf(),
                     output_path,
                     size,
                     should_chunk,
                 });
 
-                *file_id += 1;
+                debug_log!(
+                    "discovered file {}: {:?} ({} bytes)",
+                    file_id,
+                    current,
+                    size
+                );
             }
         } else if current.is_dir() {
             let mut entries = tokio::fs::read_dir(current).await?;
             while let Some(entry) = entries.next_entry().await? {
-                discover_files_recursive(root, &entry.path(), mode, tasks, file_id).await?;
+                discover_files_recursive(root, &entry.path(), mode, tasks).await?;
             }
         }
 
@@ -98,11 +104,12 @@ fn discover_files_recursive<'a>(
 // code for file reading workers.
 
 // reads a file and sends chunks to encryption pipeline
-pub async fn worker_read(
-    task: FileTask,
-    tx: mpsc::Sender<ReadMessage>,
-) -> Result<()> {
-    debug_log!("reader: opening {:?}", task.original_path);
+pub async fn worker_read(task: FileTask, tx: mpsc::Sender<ReadMessage>) -> Result<()> {
+    debug_log!(
+        "reader [{}]: opening {:?}",
+        task.file_id,
+        task.original_path
+    );
 
     let mut file = File::open(&task.original_path).await?;
 
@@ -118,7 +125,13 @@ pub async fn worker_read(
             is_last: true,
         })
         .await
-        .map_err(|_| anyhow::anyhow!("channel closed"))?;
+        .map_err(|_| anyhow::anyhow!("channel closed while sending chunk"))?;
+
+        debug_log!(
+            "reader [{}]: sent single chunk ({} bytes)",
+            task.file_id,
+            task.size
+        );
     } else {
         // large file - chunk it
         let mut sequence = 0u32;
@@ -134,10 +147,11 @@ pub async fn worker_read(
             let chunk_data = buffer[..bytes_read].to_vec();
 
             debug_log!(
-                "reader: chunk {} for file {} ({} bytes)",
-                sequence,
+                "reader [{}]: sending chunk {} ({} bytes, last={})",
                 task.file_id,
-                bytes_read
+                sequence,
+                bytes_read,
+                is_last
             );
 
             tx.send(ReadMessage::Chunk {
@@ -147,7 +161,7 @@ pub async fn worker_read(
                 is_last,
             })
             .await
-            .map_err(|_| anyhow::anyhow!("channel closed"))?;
+            .map_err(|_| anyhow::anyhow!("channel closed while sending chunk {}", sequence))?;
 
             sequence += 1;
             if is_last {
@@ -161,9 +175,9 @@ pub async fn worker_read(
         original_path: task.original_path.clone(),
     })
     .await
-    .map_err(|_| anyhow::anyhow!("channel closed"))?;
+    .map_err(|_| anyhow::anyhow!("channel closed while sending FileComplete"))?;
 
-    debug_log!("reader: done with file {}", task.file_id);
+    debug_log!("reader [{}]: completed", task.file_id);
     Ok(())
 }
 
@@ -218,7 +232,7 @@ pub async fn worker_encrypt(
     mut rx: mpsc::Receiver<ReadMessage>,
     tx: mpsc::Sender<EncryptedChunk>,
     pk: PublicKey,
-    contexts: Arc<Mutex<HashMap<u64, FileEncryptionContext>>>,
+    contexts: Arc<Mutex<HashMap<Uuid, FileEncryptionContext>>>,
 ) -> Result<()> {
     debug_log!("encrypt worker {}: started", id);
 
@@ -233,7 +247,11 @@ pub async fn worker_encrypt(
                 let sym_key = {
                     let mut ctx = contexts.lock().await;
                     let entry = ctx.entry(file_id).or_insert_with(|| {
-                        debug_log!("encrypt worker {}: new context for file {}", id, file_id);
+                        debug_log!(
+                            "encrypt worker {}: created new context for file [{}]",
+                            id,
+                            file_id
+                        );
                         let (key, _) = generate_sym_key().expect("keygen failed");
                         let enc_key = encrypt_key(&pk, key.clone()).expect("key encrypt failed");
                         FileEncryptionContext {
@@ -252,16 +270,20 @@ pub async fn worker_encrypt(
 
                 let key_clone = sym_key;
                 let nonce_clone = nonce;
+                let data_len = data.len();
                 let encrypted = tokio::task::spawn_blocking(move || {
                     aead::seal(&data, None, &nonce_clone, &key_clone)
                 })
                 .await?;
 
                 debug_log!(
-                    "encrypt worker {}: chunk {} of file {} done",
+                    "encrypt worker {}: encrypted chunk {} of file [{}] ({} -> {} bytes, last={})",
                     id,
                     sequence,
-                    file_id
+                    file_id,
+                    data_len,
+                    encrypted.len(),
+                    is_last
                 );
 
                 tx.send(EncryptedChunk {
@@ -272,7 +294,12 @@ pub async fn worker_encrypt(
                     is_last,
                 })
                 .await
-                .map_err(|_| anyhow::anyhow!("channel closed"))?;
+                .map_err(|_| {
+                    anyhow::anyhow!(
+                        "worker {}: channel closed while sending encrypted chunk",
+                        id
+                    )
+                })?;
             }
             ReadMessage::FileComplete { .. } => {
                 // ignored - writer uses is_last flag
@@ -290,7 +317,7 @@ pub fn spawn_workers_encrypt(
     mut rx: mpsc::Receiver<ReadMessage>,
     tx: mpsc::Sender<EncryptedChunk>,
     pk: PublicKey,
-    contexts: Arc<Mutex<HashMap<u64, FileEncryptionContext>>>,
+    contexts: Arc<Mutex<HashMap<Uuid, FileEncryptionContext>>>,
 ) -> tokio::task::JoinHandle<Result<()>> {
     debug_log!("encrypt dispatcher: spawning {} workers", num_workers);
 
@@ -411,8 +438,8 @@ impl FileWriteState {
     }
 
     // writes header + chunks to output file
-    pub async fn finalize(&self) -> Result<()> {
-        debug_log!("writer: finalizing {:?}", self.original_path);
+    pub async fn finalize(&self, file_id: Uuid) -> Result<()> {
+        debug_log!("writer [{}]: finalizing {:?}", file_id, self.original_path);
 
         let chunk_infos: Vec<ChunkInfo> = self
             .chunks
@@ -434,51 +461,91 @@ impl FileWriteState {
 
         let header_bytes = header.to_bytes()?;
 
-        let mut file = File::create(&self.output_path).await?;
-        file.write_all(&header_bytes).await?;
+        debug_log!(
+            "writer [{}]: creating output file {:?}",
+            file_id,
+            self.output_path
+        );
+        let mut file = File::create(&self.output_path).await.map_err(|e| {
+            anyhow::anyhow!("failed to create output file {:?}: {}", self.output_path, e)
+        })?;
 
-        for (_, chunk) in &self.chunks {
-            file.write_all(&chunk.data).await?;
+        debug_log!(
+            "writer [{}]: writing header ({} bytes)",
+            file_id,
+            header_bytes.len()
+        );
+        file.write_all(&header_bytes)
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to write header: {}", e))?;
+
+        for (seq, chunk) in &self.chunks {
+            debug_log!(
+                "writer [{}]: writing chunk {} ({} bytes)",
+                file_id,
+                seq,
+                chunk.data.len()
+            );
+            file.write_all(&chunk.data)
+                .await
+                .map_err(|e| anyhow::anyhow!("failed to write chunk {}: {}", seq, e))?;
         }
 
-        file.flush().await?;
+        debug_log!("writer [{}]: flushing file", file_id);
+        file.flush()
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to flush file: {}", e))?;
 
         // delete original only after successful write
-        tokio::fs::remove_file(&self.original_path).await?;
+        debug_log!(
+            "writer [{}]: deleting original file {:?}",
+            file_id,
+            self.original_path
+        );
+        tokio::fs::remove_file(&self.original_path)
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "failed to delete original file {:?}: {}",
+                    self.original_path,
+                    e
+                )
+            })?;
 
-        debug_log!("writer: done with {:?}", self.original_path);
+        debug_log!("writer [{}]: completed {:?}", file_id, self.original_path);
         Ok(())
     }
 }
 
 // file metadata: (output_path, original_path, relative_name, size)
-pub type FileMetadata = HashMap<u64, (PathBuf, PathBuf, String, u64)>;
+pub type FileMetadata = HashMap<Uuid, (PathBuf, PathBuf, String, u64)>;
 
 // writes encrypted chunks to files
 pub async fn worker_write(
     mut rx: mpsc::Receiver<EncryptedChunk>,
     metadata: Arc<Mutex<FileMetadata>>,
-    contexts: Arc<Mutex<HashMap<u64, FileEncryptionContext>>>,
+    contexts: Arc<Mutex<HashMap<Uuid, FileEncryptionContext>>>,
 ) -> Result<()> {
     debug_log!("writer: started");
 
-    let mut states: HashMap<u64, FileWriteState> = HashMap::new();
+    let mut states: HashMap<Uuid, FileWriteState> = HashMap::new();
 
     while let Some(chunk) = rx.recv().await {
         let file_id = chunk.file_id;
 
         // create state if needed
         if !states.contains_key(&file_id) {
+            debug_log!("writer: creating state for file [{}]", file_id);
             let meta = metadata.lock().await;
             let (output, original, relative, size) = meta
                 .get(&file_id)
-                .ok_or_else(|| anyhow::anyhow!("no metadata for file {}", file_id))?
+                .ok_or_else(|| anyhow::anyhow!("no metadata for file [{}]", file_id))?
                 .clone();
 
             let ctx = contexts.lock().await;
             let enc_key = ctx
                 .get(&file_id)
-                .ok_or_else(|| anyhow::anyhow!("no context for file {}", file_id))?
+                .ok_or_else(|| anyhow::anyhow!("no context for file [{}]", file_id))?
                 .encrypted_sym_key
                 .clone();
 
@@ -489,10 +556,20 @@ pub async fn worker_write(
         }
 
         let state = states.get_mut(&file_id).unwrap();
+        debug_log!(
+            "writer [{}]: received chunk {} (last={})",
+            file_id,
+            chunk.sequence,
+            chunk.is_last
+        );
         state.add_chunk(chunk);
 
         if state.is_complete() {
-            state.finalize().await?;
+            debug_log!(
+                "writer [{}]: all chunks received, starting finalization",
+                file_id
+            );
+            state.finalize(file_id).await?;
             states.remove(&file_id);
 
             let mut ctx = contexts.lock().await;
@@ -513,11 +590,9 @@ pub async fn worker_write(
 pub fn spawn_workers_write(
     rx: mpsc::Receiver<EncryptedChunk>,
     metadata: Arc<Mutex<FileMetadata>>,
-    contexts: Arc<Mutex<HashMap<u64, FileEncryptionContext>>>,
+    contexts: Arc<Mutex<HashMap<Uuid, FileEncryptionContext>>>,
 ) -> tokio::task::JoinHandle<Result<()>> {
-    tokio::spawn(async move {
-        worker_write(rx, metadata, contexts).await
-    })
+    tokio::spawn(async move { worker_write(rx, metadata, contexts).await })
 }
 
 // ================== ENCRYPTION ENTRYPOINT ==================
@@ -550,7 +625,7 @@ pub async fn encrypt_folder_parallel(
 
     // shared state
     let metadata: Arc<Mutex<FileMetadata>> = Arc::new(Mutex::new(HashMap::new()));
-    let contexts: Arc<Mutex<HashMap<u64, FileEncryptionContext>>> =
+    let contexts: Arc<Mutex<HashMap<Uuid, FileEncryptionContext>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
     // populate metadata
