@@ -23,14 +23,14 @@ pub struct PaymentWindow {
     #[nwg_control(text: "", position: (20, 70), size: (600, 380), flags: "VISIBLE|VSCROLL|AUTOVSCROLL", readonly: true)]
     instructions: nwg::TextBox,
 
-    #[nwg_control(text: "Make Payment", position: (200, 460), size: (120, 40))]
+    #[nwg_control(text: "Make Payment", position: (100, 460), size: (200, 50))]
     #[nwg_events(OnButtonClick: [PaymentWindow::make_payment])]
     payment_button: nwg::Button,
-    #[nwg_control(text: "Check Payment Status", position: (340, 460), size: (120, 40))]
+    #[nwg_control(text: "Check Payment Status", position: (320, 460), size: (200, 50))]
     #[nwg_events(OnButtonClick: [PaymentWindow::check_status])]
     status_button: nwg::Button,
 
-    #[nwg_control(text: "", position: (20, 510), size: (580, 50), flags: "VISIBLE", readonly: true)]
+    #[nwg_control(text: "", position: (20, 520), size: (580, 50), flags: "VISIBLE", readonly: true)]
     status_display: nwg::TextBox,
 
     pub_key: Rc<RefCell<Option<PublicKey>>>,
