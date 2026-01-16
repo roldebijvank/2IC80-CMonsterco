@@ -1,9 +1,9 @@
 // data structures for parallel encryption
 
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU64;
-use serde::{Serialize, Deserialize};
-use anyhow::Result;
 
 // set to false in production
 pub const DEBUG_ENABLED: bool = true;
@@ -20,7 +20,7 @@ macro_rules! debug_log {
 
 // =================== CONFIG ===================
 
-pub const CHUNK_SIZE: usize = 4 * 1024 * 1024;         // 4 MB
+pub const CHUNK_SIZE: usize = 4 * 1024 * 1024; // 4 MB
 pub const SMALL_FILE_THRESHOLD: u64 = 10 * 1024 * 1024; // 10 MB
 pub const CHANNEL_BOUND: usize = 8;
 
@@ -65,7 +65,11 @@ impl FileHeader {
         let len = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
 
         if bytes.len() < 4 + len {
-            return Err(anyhow::anyhow!("need {} bytes, have {}", 4 + len, bytes.len()));
+            return Err(anyhow::anyhow!(
+                "need {} bytes, have {}",
+                4 + len,
+                bytes.len()
+            ));
         }
 
         let header: FileHeader = serde_json::from_slice(&bytes[4..4 + len])?;
@@ -92,20 +96,24 @@ pub enum ReadMessage {
 impl Clone for ReadMessage {
     fn clone(&self) -> Self {
         match self {
-            ReadMessage::Chunk { file_id, sequence, data, is_last } => {
-                ReadMessage::Chunk {
-                    file_id: *file_id,
-                    sequence: *sequence,
-                    data: data.clone(),
-                    is_last: *is_last,
-                }
-            }
-            ReadMessage::FileComplete { file_id, original_path } => {
-                ReadMessage::FileComplete {
-                    file_id: *file_id,
-                    original_path: original_path.clone(),
-                }
-            }
+            ReadMessage::Chunk {
+                file_id,
+                sequence,
+                data,
+                is_last,
+            } => ReadMessage::Chunk {
+                file_id: *file_id,
+                sequence: *sequence,
+                data: data.clone(),
+                is_last: *is_last,
+            },
+            ReadMessage::FileComplete {
+                file_id,
+                original_path,
+            } => ReadMessage::FileComplete {
+                file_id: *file_id,
+                original_path: original_path.clone(),
+            },
         }
     }
 }
@@ -144,21 +152,26 @@ impl EncryptionStats {
     }
 
     pub fn inc_files_processed(&self) {
-        self.files_processed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.files_processed
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn add_bytes_processed(&self, bytes: u64) {
-        self.bytes_processed.fetch_add(bytes, std::sync::atomic::Ordering::Relaxed);
+        self.bytes_processed
+            .fetch_add(bytes, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn inc_files_failed(&self) {
-        self.files_failed.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.files_failed
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub fn snapshot(&self) -> (u64, u64, u64) {
         (
-            self.files_processed.load(std::sync::atomic::Ordering::Relaxed),
-            self.bytes_processed.load(std::sync::atomic::Ordering::Relaxed),
+            self.files_processed
+                .load(std::sync::atomic::Ordering::Relaxed),
+            self.bytes_processed
+                .load(std::sync::atomic::Ordering::Relaxed),
             self.files_failed.load(std::sync::atomic::Ordering::Relaxed),
         )
     }

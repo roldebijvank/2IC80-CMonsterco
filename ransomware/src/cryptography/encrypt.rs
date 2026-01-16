@@ -1,9 +1,11 @@
-use std::fs;
-use std::path::{Path};
 use anyhow::Result;
+use std::fs;
+use std::path::Path;
 
 use sodiumoxide::crypto::aead::xchacha20poly1305_ietf as aead;
-use sodiumoxide::crypto::box_::{PublicKey};
+use sodiumoxide::crypto::box_::PublicKey;
+
+use crate::debug_log;
 
 use crate::cryptography::keys::{encrypt_key, generate_sym_key};
 
@@ -34,14 +36,14 @@ pub fn encrypt_folder(folder_path: &Path, key: &PublicKey) -> Result<()> {
         return Err(anyhow::anyhow!("Invalid folder path"));
     }
     encrypt_recursively(folder_path, key)?;
-    println!("Encryption completed for folder: {:?}", folder_path);
+    debug_log!("Encryption completed for folder: {:?}", folder_path);
     Ok(())
 }
 
 fn encrypt_recursively(path: &Path, key: &PublicKey) -> Result<()> {
     if path.is_file() {
         encrypt_file(path, &key)?;
-        println!("Encrypted file: {:?}", path);
+        debug_log!("Encrypted file: {:?}", path);
     } else if path.is_dir() {
         for entry in fs::read_dir(path)? {
             let entry = entry?;

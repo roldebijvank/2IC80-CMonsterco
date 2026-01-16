@@ -12,9 +12,6 @@ use sodiumoxide::crypto::box_::{PublicKey};
 
 use windows::{
     core::PWSTR,
-    Win32::{
-        UI::Shell::{SHGetKnownFolderPath, FOLDERID_Music, FOLDERID_Documents, FOLDERID_Desktop, FOLDERID_Videos, KNOWN_FOLDER_FLAG},
-    },
 };
 
 fn desktop_file_path(filename: &str) -> Result<PathBuf> {

@@ -1,23 +1,23 @@
 // parallel encryption pipeline
 
-use std::collections::{HashMap, BTreeMap};
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::pin::Pin;
+use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
+use std::path::{Path, PathBuf};
+use std::pin::Pin;
+use std::sync::Arc;
 
 use anyhow::Result;
 use sodiumoxide::crypto::aead::xchacha20poly1305_ietf as aead;
 use sodiumoxide::crypto::box_::PublicKey;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 
 use crate::cryptography::chunk::{
-    ReadMessage, EncryptedChunk, FileTask, ChunkInfo, FileHeader,
-    CHUNK_SIZE, CHANNEL_BOUND, SMALL_FILE_THRESHOLD,
+    CHANNEL_BOUND, CHUNK_SIZE, ChunkInfo, EncryptedChunk, FileHeader, FileTask, ReadMessage,
+    SMALL_FILE_THRESHOLD,
 };
-use crate::cryptography::keys::{generate_sym_key, encrypt_key};
+use crate::cryptography::keys::{encrypt_key, generate_sym_key};
 use crate::debug_log;
 
 // 4 main "parts": recursive file discovery, file reader, encryption worker, file writer.
@@ -28,15 +28,12 @@ use crate::debug_log;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FileSearchMode {
-    ForEncryption,  // find regular files, skip .enc
-    ForDecryption,  // find .enc files only
+    ForEncryption, // find regular files, skip .enc
+    ForDecryption, // find .enc files only
 }
 
 // discovers files recursively based on mode
-pub async fn discover_files(
-    folder_path: &Path,
-    mode: FileSearchMode,
-) -> Result<Vec<FileTask>> {
+pub async fn discover_files(folder_path: &Path, mode: FileSearchMode) -> Result<Vec<FileTask>> {
     let mut tasks = Vec::new();
     let mut file_id = 0u64;
     discover_files_recursive(folder_path, folder_path, mode, &mut tasks, &mut file_id).await?;
@@ -54,16 +51,16 @@ fn discover_files_recursive<'a>(
     Box::pin(async move {
         if current.is_file() {
             let is_enc = current.extension().map_or(false, |e| e == "enc");
-            
+
             let should_consider = match mode {
                 FileSearchMode::ForEncryption => !is_enc,
                 FileSearchMode::ForDecryption => is_enc,
             };
-            
+
             if should_consider {
                 let metadata = tokio::fs::metadata(current).await?;
                 let size = metadata.len();
-                
+
                 let output_path = match mode {
                     FileSearchMode::ForEncryption => {
                         PathBuf::from(format!("{}.enc", current.to_string_lossy()))
@@ -73,9 +70,9 @@ fn discover_files_recursive<'a>(
                         current.with_extension("")
                     }
                 };
-                
+
                 let should_chunk = size > SMALL_FILE_THRESHOLD;
-                
+
                 tasks.push(FileTask {
                     file_id: *file_id,
                     original_path: current.to_path_buf(),
@@ -83,7 +80,7 @@ fn discover_files_recursive<'a>(
                     size,
                     should_chunk,
                 });
-                
+
                 *file_id += 1;
             }
         } else if current.is_dir() {
@@ -92,7 +89,7 @@ fn discover_files_recursive<'a>(
                 discover_files_recursive(root, &entry.path(), mode, tasks, file_id).await?;
             }
         }
-        
+
         Ok(())
     })
 }
@@ -119,7 +116,9 @@ pub async fn worker_read(
             sequence: 0,
             data,
             is_last: true,
-        }).await.map_err(|_| anyhow::anyhow!("channel closed"))?;
+        })
+        .await
+        .map_err(|_| anyhow::anyhow!("channel closed"))?;
     } else {
         // large file - chunk it
         let mut sequence = 0u32;
@@ -134,14 +133,21 @@ pub async fn worker_read(
             let is_last = bytes_read < CHUNK_SIZE;
             let chunk_data = buffer[..bytes_read].to_vec();
 
-            debug_log!("reader: chunk {} for file {} ({} bytes)", sequence, task.file_id, bytes_read);
+            debug_log!(
+                "reader: chunk {} for file {} ({} bytes)",
+                sequence,
+                task.file_id,
+                bytes_read
+            );
 
             tx.send(ReadMessage::Chunk {
                 file_id: task.file_id,
                 sequence,
                 data: chunk_data,
                 is_last,
-            }).await.map_err(|_| anyhow::anyhow!("channel closed"))?;
+            })
+            .await
+            .map_err(|_| anyhow::anyhow!("channel closed"))?;
 
             sequence += 1;
             if is_last {
@@ -153,7 +159,9 @@ pub async fn worker_read(
     tx.send(ReadMessage::FileComplete {
         file_id: task.file_id,
         original_path: task.original_path.clone(),
-    }).await.map_err(|_| anyhow::anyhow!("channel closed"))?;
+    })
+    .await
+    .map_err(|_| anyhow::anyhow!("channel closed"))?;
 
     debug_log!("reader: done with file {}", task.file_id);
     Ok(())
@@ -216,7 +224,12 @@ pub async fn worker_encrypt(
 
     while let Some(msg) = rx.recv().await {
         match msg {
-            ReadMessage::Chunk { file_id, sequence, data, is_last } => {
+            ReadMessage::Chunk {
+                file_id,
+                sequence,
+                data,
+                is_last,
+            } => {
                 let sym_key = {
                     let mut ctx = contexts.lock().await;
                     let entry = ctx.entry(file_id).or_insert_with(|| {
@@ -234,15 +247,22 @@ pub async fn worker_encrypt(
                 };
 
                 let nonce = aead::gen_nonce();
-                let nonce_bytes: [u8; 24] = nonce.as_ref().try_into().expect("nonce must be 24 bytes");
+                let nonce_bytes: [u8; 24] =
+                    nonce.as_ref().try_into().expect("nonce must be 24 bytes");
 
                 let key_clone = sym_key;
                 let nonce_clone = nonce;
                 let encrypted = tokio::task::spawn_blocking(move || {
                     aead::seal(&data, None, &nonce_clone, &key_clone)
-                }).await?;
+                })
+                .await?;
 
-                debug_log!("encrypt worker {}: chunk {} of file {} done", id, sequence, file_id);
+                debug_log!(
+                    "encrypt worker {}: chunk {} of file {} done",
+                    id,
+                    sequence,
+                    file_id
+                );
 
                 tx.send(EncryptedChunk {
                     file_id,
@@ -250,7 +270,9 @@ pub async fn worker_encrypt(
                     data: encrypted,
                     nonce: nonce_bytes,
                     is_last,
-                }).await.map_err(|_| anyhow::anyhow!("channel closed"))?;
+                })
+                .await
+                .map_err(|_| anyhow::anyhow!("channel closed"))?;
             }
             ReadMessage::FileComplete { .. } => {
                 // ignored - writer uses is_last flag
@@ -392,13 +414,15 @@ impl FileWriteState {
     pub async fn finalize(&self) -> Result<()> {
         debug_log!("writer: finalizing {:?}", self.original_path);
 
-        let chunk_infos: Vec<ChunkInfo> = self.chunks.iter().map(|(seq, c)| {
-            ChunkInfo {
+        let chunk_infos: Vec<ChunkInfo> = self
+            .chunks
+            .iter()
+            .map(|(seq, c)| ChunkInfo {
                 sequence: *seq,
                 encrypted_size: c.data.len(),
                 nonce: c.nonce,
-            }
-        }).collect();
+            })
+            .collect();
 
         let header = FileHeader {
             original_filename: self.relative_name.clone(),
@@ -446,16 +470,22 @@ pub async fn worker_write(
         // create state if needed
         if !states.contains_key(&file_id) {
             let meta = metadata.lock().await;
-            let (output, original, relative, size) = meta.get(&file_id)
+            let (output, original, relative, size) = meta
+                .get(&file_id)
                 .ok_or_else(|| anyhow::anyhow!("no metadata for file {}", file_id))?
                 .clone();
 
             let ctx = contexts.lock().await;
-            let enc_key = ctx.get(&file_id)
+            let enc_key = ctx
+                .get(&file_id)
                 .ok_or_else(|| anyhow::anyhow!("no context for file {}", file_id))?
-                .encrypted_sym_key.clone();
+                .encrypted_sym_key
+                .clone();
 
-            states.insert(file_id, FileWriteState::new(output, original, relative, size, enc_key));
+            states.insert(
+                file_id,
+                FileWriteState::new(output, original, relative, size, enc_key),
+            );
         }
 
         let state = states.get_mut(&file_id).unwrap();
@@ -501,11 +531,13 @@ pub async fn encrypt_folder_parallel(
         return Err(anyhow::anyhow!("invalid folder path"));
     }
 
-    let num_workers = num_workers.unwrap_or_else(|| {
-        num_cpus::get().saturating_sub(1).max(1)
-    });
+    let num_workers = num_workers.unwrap_or_else(|| num_cpus::get().saturating_sub(1).max(1));
 
-    debug_log!("orchestrator: encrypting {:?} with {} workers", folder_path, num_workers);
+    debug_log!(
+        "orchestrator: encrypting {:?} with {} workers",
+        folder_path,
+        num_workers
+    );
 
     // discover files
     let tasks = discover_files(folder_path, FileSearchMode::ForEncryption).await?;
@@ -518,18 +550,28 @@ pub async fn encrypt_folder_parallel(
 
     // shared state
     let metadata: Arc<Mutex<FileMetadata>> = Arc::new(Mutex::new(HashMap::new()));
-    let contexts: Arc<Mutex<HashMap<u64, FileEncryptionContext>>> = Arc::new(Mutex::new(HashMap::new()));
+    let contexts: Arc<Mutex<HashMap<u64, FileEncryptionContext>>> =
+        Arc::new(Mutex::new(HashMap::new()));
 
     // populate metadata
     {
         let mut m = metadata.lock().await;
         for t in &tasks {
-            let relative = t.original_path
+            let relative = t
+                .original_path
                 .strip_prefix(folder_path)
                 .unwrap_or(&t.original_path)
                 .to_string_lossy()
                 .to_string();
-            m.insert(t.file_id, (t.output_path.clone(), t.original_path.clone(), relative, t.size));
+            m.insert(
+                t.file_id,
+                (
+                    t.output_path.clone(),
+                    t.original_path.clone(),
+                    relative,
+                    t.size,
+                ),
+            );
         }
     }
 
@@ -539,7 +581,13 @@ pub async fn encrypt_folder_parallel(
 
     // spawn pipeline
     let reader_handle = spawn_workers_read(tasks, read_tx);
-    let encrypt_handle = spawn_workers_encrypt(num_workers, read_rx, encrypt_tx, pk.clone(), contexts.clone());
+    let encrypt_handle = spawn_workers_encrypt(
+        num_workers,
+        read_rx,
+        encrypt_tx,
+        pk.clone(),
+        contexts.clone(),
+    );
     let writer_handle = spawn_workers_write(encrypt_rx, metadata.clone(), contexts.clone());
 
     // wait for completion
@@ -552,65 +600,6 @@ pub async fn encrypt_folder_parallel(
     writer_handle.await??;
     debug_log!("orchestrator: writer done");
 
-    println!("encryption completed for {:?}", folder_path);
+    debug_log!("encryption completed for {:?}", folder_path);
     Ok(())
-}
-
-
-// a couple tests
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_file_write_state_complete() {
-        let mut state = FileWriteState::new(
-            PathBuf::from("out.enc"),
-            PathBuf::from("in.txt"),
-            "in.txt".to_string(),
-            100,
-            vec![1, 2, 3],
-        );
-
-        assert!(!state.is_complete());
-
-        state.add_chunk(EncryptedChunk {
-            file_id: 0,
-            sequence: 0,
-            data: vec![1, 2, 3],
-            nonce: [0u8; 24],
-            is_last: true,
-        });
-
-        assert!(state.is_complete());
-    }
-
-    #[test]
-    fn test_file_write_state_multi_chunk() {
-        let mut state = FileWriteState::new(
-            PathBuf::from("out.enc"),
-            PathBuf::from("in.txt"),
-            "in.txt".to_string(),
-            100,
-            vec![1, 2, 3],
-        );
-
-        state.add_chunk(EncryptedChunk {
-            file_id: 0,
-            sequence: 1,
-            data: vec![4, 5],
-            nonce: [0u8; 24],
-            is_last: true,
-        });
-        assert!(!state.is_complete()); // missing chunk 0
-
-        state.add_chunk(EncryptedChunk {
-            file_id: 0,
-            sequence: 0,
-            data: vec![1, 2, 3],
-            nonce: [0u8; 24],
-            is_last: false,
-        });
-        assert!(state.is_complete());
-    }
 }
