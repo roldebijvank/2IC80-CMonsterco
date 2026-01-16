@@ -140,76 +140,44 @@ pub struct FileTask {
 }
 
 // stats (unused for now)
-#[derive(Debug, Default)]
-pub struct EncryptionStats {
-    pub files_processed: AtomicU64,
-    pub bytes_processed: AtomicU64,
-    pub files_failed: AtomicU64,
-}
+// #[derive(Debug, Default)]
+// pub struct EncryptionStats {
+//     pub files_processed: AtomicU64,
+//     pub bytes_processed: AtomicU64,
+//     pub files_failed: AtomicU64,
+// }
 
-impl EncryptionStats {
-    pub fn new() -> Self {
-        Self::default()
-    }
+// impl EncryptionStats {
+//     pub fn new() -> Self {
+//         Self::default()
+//     }
 
-    pub fn inc_files_processed(&self) {
-        self.files_processed
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    }
+//     pub fn inc_files_processed(&self) {
+//         self.files_processed
+//             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+//     }
 
-    pub fn add_bytes_processed(&self, bytes: u64) {
-        self.bytes_processed
-            .fetch_add(bytes, std::sync::atomic::Ordering::Relaxed);
-    }
+//     pub fn add_bytes_processed(&self, bytes: u64) {
+//         self.bytes_processed
+//             .fetch_add(bytes, std::sync::atomic::Ordering::Relaxed);
+//     }
 
-    pub fn inc_files_failed(&self) {
-        self.files_failed
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    }
+//     pub fn inc_files_failed(&self) {
+//         self.files_failed
+//             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+//     }
 
-    pub fn snapshot(&self) -> (u64, u64, u64) {
-        (
-            self.files_processed
-                .load(std::sync::atomic::Ordering::Relaxed),
-            self.bytes_processed
-                .load(std::sync::atomic::Ordering::Relaxed),
-            self.files_failed.load(std::sync::atomic::Ordering::Relaxed),
-        )
-    }
-}
+//     pub fn snapshot(&self) -> (u64, u64, u64) {
+//         (
+//             self.files_processed
+//                 .load(std::sync::atomic::Ordering::Relaxed),
+//             self.bytes_processed
+//                 .load(std::sync::atomic::Ordering::Relaxed),
+//             self.files_failed.load(std::sync::atomic::Ordering::Relaxed),
+//         )
+//     }
+// }
 
-// progress callback
-// set to None to disable
-pub type ProgressCallback = Option<Box<dyn Fn(u64, u64, u64) + Send + Sync>>;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_header_roundtrip() {
-        let header = FileHeader {
-            original_filename: "test.txt".to_string(),
-            original_size: 1024,
-            chunk_count: 1,
-            chunks: vec![ChunkInfo {
-                sequence: 0,
-                encrypted_size: 1040,
-                nonce: [0u8; 24],
-            }],
-            encrypted_sym_key: vec![1, 2, 3],
-        };
-
-        let bytes = header.to_bytes().unwrap();
-        let (parsed, consumed) = FileHeader::from_bytes(&bytes).unwrap();
-
-        assert_eq!(parsed.original_filename, header.original_filename);
-        assert_eq!(parsed.original_size, header.original_size);
-        assert_eq!(consumed, bytes.len());
-    }
-
-    #[test]
-    fn test_header_too_small() {
-        assert!(FileHeader::from_bytes(&[0, 0, 0]).is_err());
-    }
-}
+// // progress callback
+// // set to None to disable
+// pub type ProgressCallback = Option<Box<dyn Fn(u64, u64, u64) + Send + Sync>>;

