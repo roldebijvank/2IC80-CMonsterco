@@ -3,7 +3,6 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::sync::atomic::AtomicU64;
 use uuid::Uuid;
 
 // set to false in production

