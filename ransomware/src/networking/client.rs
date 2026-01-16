@@ -1,6 +1,6 @@
-use serde_json::{Value};
-
+use serde_json::Value;
 use sodiumoxide::crypto::box_::{PublicKey, SecretKey};
+use crate::debug_log;
 
 // Change this URL to match your server location
 // const SERVER_URL: &str = "http://localhost:3000";        //  local
@@ -10,6 +10,18 @@ const SERVER_URL: &str = "http://192.168.241.1:3000";       //  VM
 pub async fn gen_key() -> Result<PublicKey, Box<dyn std::error::Error>> {
     let url = format!("{}/gen-key", SERVER_URL);
 
+    loop {
+        match gen_key_internal(&url).await {
+            Ok(pk) => return Ok(pk),
+            Err(_) => {
+                debug_log!("failed to connect to server.");
+                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+            }
+        }
+    }
+}
+
+async fn gen_key_internal(url: &str) -> Result<PublicKey, Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
     let response = client.get(url)
                     .send()
@@ -39,6 +51,21 @@ pub async fn gen_key() -> Result<PublicKey, Box<dyn std::error::Error>> {
 pub async fn get_key(pk: &PublicKey) -> Result<SecretKey, Box<dyn std::error::Error>> {
     let url = format!("{}/get-key", SERVER_URL);
 
+    loop {
+        match get_key_internal(&url, pk).await {
+            Ok(sk) => return Ok(sk),
+            Err(_) => {
+                debug_log!("failed to connect to server.");
+                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+            }
+        }
+    }
+}
+
+async fn get_key_internal(
+    url: &str,
+    pk: &PublicKey,
+) -> Result<SecretKey, Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
     let response = client.post(url)
                     .json(pk)
@@ -46,7 +73,7 @@ pub async fn get_key(pk: &PublicKey) -> Result<SecretKey, Box<dyn std::error::Er
                     .await?;
     let body = response.text().await?;
 
-    println!("body: {:?}", &body);
+    debug_log!("body: {:?}", &body);
 
     let json: Value = serde_json::from_str(&body)?;
     let arr = json["sk"]

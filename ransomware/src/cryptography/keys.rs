@@ -1,7 +1,7 @@
+use anyhow::Result;
 use sodiumoxide::crypto::aead::xchacha20poly1305_ietf as aead;
 use sodiumoxide::crypto::box_::{PublicKey, SecretKey};
 use sodiumoxide::crypto::sealedbox;
-use anyhow::Result;
 
 pub fn generate_sym_key() -> Result<(aead::Key, aead::Nonce)> {
     let key = aead::gen_key();

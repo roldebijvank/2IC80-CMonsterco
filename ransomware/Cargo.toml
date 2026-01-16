@@ -19,6 +19,17 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.136"
 sodiumoxide = "0.2.7"
 fs = "0.0.5"
+num_cpus = "1.16"
+
+[build-dependencies]
+embed-resource = "2.4"
+
+[profile.release]
+strip = true
+lto = true
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
 
 [build-dependencies]
 embed-resource = "2.4"
