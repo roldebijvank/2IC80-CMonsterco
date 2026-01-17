@@ -61,6 +61,7 @@ fn discover_files_recursive<'a>(
                     || filename_str == "thumbs.db"
                     || filename_str == ".ds_store"  // macOS
                     || filename_str.starts_with("~$")
+                    || filename_str == "encrypt.rs" // for testing - don't encrypt the source exe
                 // Office temp files
                 {
                     debug_log!("discovery: skipping system file {:?}", current);
