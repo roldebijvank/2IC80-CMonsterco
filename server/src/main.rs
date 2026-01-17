@@ -1,5 +1,4 @@
 mod cryptography;
-
 use axum::{
     extract::{State},
     routing::{get, post},
@@ -81,7 +80,7 @@ async fn main() -> anyhow::Result<()> {
 
     // create a TCP listener (0.0.0.0:3000)
     // let listener = TcpListener::bind("0.0.0.0:3000")
-    let listener = TcpListener::bind("0.0.0.0:3000")
+    let listener = TcpListener::bind("127.0.0.1:3000")
         .await
         .expect("failed to bind");
 
