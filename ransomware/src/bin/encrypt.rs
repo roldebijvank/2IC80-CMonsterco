@@ -7,19 +7,19 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 // use c_monster_co_2ic80::cryptography::encrypt::encrypt_folder;
+use c_monster_co_2ic80::cryptography::chunk::DEBUG_ENABLED;
 use c_monster_co_2ic80::cryptography::parallel_encrypt::encrypt_folder_parallel;
 use c_monster_co_2ic80::debug_log;
-use c_monster_co_2ic80::cryptography::chunk::{DEBUG_ENABLED};
-use c_monster_co_2ic80::networking::client::gen_key;
 use c_monster_co_2ic80::gui::payment::show_payment_window;
 use c_monster_co_2ic80::gui::warning::show_warning_window;
+use c_monster_co_2ic80::networking::client::gen_key;
 
 use sodiumoxide::crypto::box_::PublicKey;
 
 use windows::{
     Win32::UI::Shell::{
-        FOLDERID_Desktop, FOLDERID_Downloads, FOLDERID_Music, FOLDERID_Videos, FOLDERID_Pictures, KNOWN_FOLDER_FLAG,
-        SHGetKnownFolderPath,
+        FOLDERID_Desktop, FOLDERID_Downloads, FOLDERID_Music, FOLDERID_Pictures, FOLDERID_Videos,
+        KNOWN_FOLDER_FLAG, SHGetKnownFolderPath,
     },
     core::PWSTR,
 };

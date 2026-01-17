@@ -5,17 +5,17 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 // use c_monster_co_2ic80::cryptography::encrypt::decrypt_folder;
+use c_monster_co_2ic80::cryptography::chunk::DEBUG_ENABLED;
 use c_monster_co_2ic80::cryptography::decrypt_parallel::decrypt_folder_parallel;
 use c_monster_co_2ic80::debug_log;
-use c_monster_co_2ic80::cryptography::chunk::{DEBUG_ENABLED};
 use c_monster_co_2ic80::networking::client::get_key;
 
 use sodiumoxide::crypto::box_::PublicKey;
 
 use windows::{
     Win32::UI::Shell::{
-        FOLDERID_Desktop, FOLDERID_Downloads, FOLDERID_Music, FOLDERID_Videos, FOLDERID_Pictures, KNOWN_FOLDER_FLAG,
-        SHGetKnownFolderPath,
+        FOLDERID_Desktop, FOLDERID_Downloads, FOLDERID_Music, FOLDERID_Pictures, FOLDERID_Videos,
+        KNOWN_FOLDER_FLAG, SHGetKnownFolderPath,
     },
     core::PWSTR,
 };
@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
     }
-    
+
     result
 }
 
@@ -61,7 +61,7 @@ async fn run_decryption() -> Result<(), Box<dyn std::error::Error>> {
         FOLDERID_Videos,
         FOLDERID_Pictures,
     ];
-    
+
     unsafe {
         for path in paths {
             let path_ptr: PWSTR = SHGetKnownFolderPath(&path, KNOWN_FOLDER_FLAG(0), None).unwrap();
