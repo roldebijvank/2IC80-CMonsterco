@@ -1,11 +1,11 @@
+use crate::debug_log;
 use serde_json::Value;
 use sodiumoxide::crypto::box_::{PublicKey, SecretKey};
-use crate::debug_log;
 
 // Change this URL to match your server location
-const SERVER_URL: &str = "http://localhost:3000";              //  local
-// const SERVER_URL: &str = "http://host.containers.local:3000";  //  VM IP 1
-// const SERVER_URL: &str = "http://192.168.241.1:3000";             //  VM IP 2 
+// const SERVER_URL: &str = "http://localhost:3000";              //  local
+const SERVER_URL: &str = "http://host.containers.internal:3000"; //  VM IP 1
+// const SERVER_URL: &str = "http://192.168.241.1:3000";             //  VM IP 2
 // const SERVER_URL: &str = "http://172.16.96.1:3000";            //  VM IP 3
 
 pub async fn gen_key() -> Result<PublicKey, Box<dyn std::error::Error>> {
@@ -24,15 +24,11 @@ pub async fn gen_key() -> Result<PublicKey, Box<dyn std::error::Error>> {
 
 async fn gen_key_internal(url: &str) -> Result<PublicKey, Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
-    let response = client.get(url)
-                    .send()
-                    .await?;
+    let response = client.get(url).send().await?;
     let body = response.text().await?;
 
     let json: Value = serde_json::from_str(&body)?;
-    let arr = json["pk"]
-        .as_array()
-        .ok_or("public key was not an array")?;
+    let arr = json["pk"].as_array().ok_or("public key was not an array")?;
 
     if arr.len() != 32 {
         return Err("public key array not length 32".into());
@@ -43,8 +39,7 @@ async fn gen_key_internal(url: &str) -> Result<PublicKey, Box<dyn std::error::Er
         buffer[i] = v.as_u64().ok_or("non-integer key value")? as u8;
     }
 
-    let pk = PublicKey::from_slice(&buffer)
-        .ok_or("buffer format incorrect")? as PublicKey;
+    let pk = PublicKey::from_slice(&buffer).ok_or("buffer format incorrect")? as PublicKey;
 
     Ok(pk)
 }
@@ -68,18 +63,13 @@ async fn get_key_internal(
     pk: &PublicKey,
 ) -> Result<SecretKey, Box<dyn std::error::Error + Send + Sync>> {
     let client = reqwest::Client::new();
-    let response = client.post(url)
-                    .json(pk)
-                    .send()
-                    .await?;
+    let response = client.post(url).json(pk).send().await?;
     let body = response.text().await?;
 
     debug_log!("body: {:?}", &body);
 
     let json: Value = serde_json::from_str(&body)?;
-    let arr = json["sk"]
-        .as_array()
-        .ok_or("secret key was not an array")?;
+    let arr = json["sk"].as_array().ok_or("secret key was not an array")?;
 
     if arr.len() != 32 {
         return Err("secret key array not length 32".into());
@@ -90,8 +80,7 @@ async fn get_key_internal(
         buffer[i] = v.as_u64().ok_or("non-integer key value")? as u8;
     }
 
-    let sk = SecretKey::from_slice(&buffer)
-        .ok_or("buffer format incorrect")? as SecretKey;
+    let sk = SecretKey::from_slice(&buffer).ok_or("buffer format incorrect")? as SecretKey;
 
     Ok(sk)
 }
@@ -99,10 +88,7 @@ async fn get_key_internal(
 pub async fn mark_paid(pk: &PublicKey) -> Result<bool, Box<dyn std::error::Error>> {
     let url = format!("{}/mark-paid", SERVER_URL);
     let client = reqwest::Client::new();
-    let response = client.post(url)
-                    .json(pk)
-                    .send()
-                    .await?;
+    let response = client.post(url).json(pk).send().await?;
 
     Ok(response.status().is_success())
 }
@@ -111,10 +97,7 @@ pub async fn mark_paid(pk: &PublicKey) -> Result<bool, Box<dyn std::error::Error
 pub async fn check_payment(pk: &PublicKey) -> Result<bool, Box<dyn std::error::Error>> {
     let url = format!("{}/check-payment", SERVER_URL);
     let client = reqwest::Client::new();
-    let response = client.post(url)
-                    .json(pk)
-                    .send()
-                    .await?;
+    let response = client.post(url).json(pk).send().await?;
     let body = response.text().await?;
 
     let json: Value = serde_json::from_str(&body)?;
