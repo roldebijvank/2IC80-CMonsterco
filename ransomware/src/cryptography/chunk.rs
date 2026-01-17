@@ -4,19 +4,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU64;
-
-// set to false in production
-pub const DEBUG_ENABLED: bool = true;
-
-// debug logging macro that can be disabled in prod
-#[macro_export]
-macro_rules! debug_log {
-    ($($arg:tt)*) => {
-        if $crate::cryptography::chunk::DEBUG_ENABLED {
-            eprintln!("[DEBUG] {}", format!($($arg)*));
-        }
-    };
-}
+use uuid::Uuid;
 
 // =================== CONFIG ===================
 
@@ -82,13 +70,13 @@ impl FileHeader {
 #[derive(Debug)]
 pub enum ReadMessage {
     Chunk {
-        file_id: u64,
+        file_id: Uuid,
         sequence: u32,
         data: Vec<u8>,
         is_last: bool,
     },
     FileComplete {
-        file_id: u64,
+        file_id: Uuid,
         original_path: PathBuf,
     },
 }
@@ -120,7 +108,7 @@ impl Clone for ReadMessage {
 
 #[derive(Debug)]
 pub struct EncryptedChunk {
-    pub file_id: u64,
+    pub file_id: Uuid,
     pub sequence: u32,
     pub data: Vec<u8>,
     pub nonce: [u8; 24],
@@ -131,7 +119,7 @@ pub struct EncryptedChunk {
 
 #[derive(Debug, Clone)]
 pub struct FileTask {
-    pub file_id: u64,
+    pub file_id: Uuid,
     pub original_path: PathBuf,
     pub output_path: PathBuf,
     pub size: u64,

