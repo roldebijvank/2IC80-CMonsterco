@@ -174,13 +174,3 @@ pub fn show_payment_window(public_key: Option<PublicKey>) {
     
     nwg::dispatch_thread_events();
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_payment_window() {
-        assert!(true);
-    }
-}
