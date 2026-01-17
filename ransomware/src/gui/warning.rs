@@ -1,8 +1,6 @@
 use native_windows_derive::NwgUi;
 use native_windows_gui as nwg;
 use nwg::NativeUi;
-use std::rc::Rc;
-use std::cell::RefCell;
 use std::thread;
 
 #[derive(Default, NwgUi)]

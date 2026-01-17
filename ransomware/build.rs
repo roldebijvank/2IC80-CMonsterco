@@ -4,5 +4,5 @@ fn main() {
     println!("cargo:rustc-link-lib=bcrypt");
 
     // Embed Windows manifest for Common Controls v6
-    embed_resource::compile("app.rc", embed_resource::NONE);
+    let _ = embed_resource::compile("app.rc", embed_resource::NONE);
 }
