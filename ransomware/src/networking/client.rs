@@ -3,9 +3,10 @@ use sodiumoxide::crypto::box_::{PublicKey, SecretKey};
 use crate::debug_log;
 
 // Change this URL to match your server location
-// const SERVER_URL: &str = "http://localhost:3000";        //  local
-const SERVER_URL: &str = "http://192.168.241.1:3000";       //  VM
-// const SERVER_URL: &str = "http://172.16.96.1:3000";      // alternative VM IP
+// const SERVER_URL: &str = "http://localhost:3000";              //  local
+// const SERVER_URL: &str = "http://host.containers.local:3000";  //  VM IP 1
+const SERVER_URL: &str = "http://192.168.241.1:3000";             //  VM IP 2 
+// const SERVER_URL: &str = "http://172.16.96.1:3000";            //  VM IP 3
 
 pub async fn gen_key() -> Result<PublicKey, Box<dyn std::error::Error>> {
     let url = format!("{}/gen-key", SERVER_URL);
@@ -65,7 +66,7 @@ pub async fn get_key(pk: &PublicKey) -> Result<SecretKey, Box<dyn std::error::Er
 async fn get_key_internal(
     url: &str,
     pk: &PublicKey,
-) -> Result<SecretKey, Box<dyn std::error::Error>> {
+) -> Result<SecretKey, Box<dyn std::error::Error + Send + Sync>> {
     let client = reqwest::Client::new();
     let response = client.post(url)
                     .json(pk)
