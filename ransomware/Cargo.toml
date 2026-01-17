@@ -34,10 +34,3 @@ rustflags = ["-C", "target-feature=+crt-static"]
 [[bin]]
 name = "encrypt"
 path = "src/bin/encrypt.rs"
-
-[[bin]]
-name = "decrypt"
-path = "src/bin/decrypt.rs"
-
-[lib]
-path = "src/lib.rs"
