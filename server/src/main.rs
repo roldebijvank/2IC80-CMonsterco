@@ -1,5 +1,4 @@
 mod cryptography;
-
 use axum::{
     extract::{State},
     routing::{get, post},
